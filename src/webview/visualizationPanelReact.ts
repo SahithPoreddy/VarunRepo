@@ -303,7 +303,8 @@ export class VisualizationPanelReact {
       type: node.type,
       filePath: node.filePath,
       description: typeof node.documentation === 'object' ? node.documentation.summary : (node.documentation || ''),
-      parentId: this.findParentId(node),
+      // Use node's parentId if set, otherwise try to find it
+      parentId: node.parentId || this.findParentId(node),
       metadata: {
         lineStart: node.startLine,
         lineEnd: node.endLine,
@@ -324,6 +325,12 @@ export class VisualizationPanelReact {
         type: edge.type
       }))
     };
+
+    console.log('Sending graph data:', {
+      nodes: graphData.nodes.length,
+      edges: graphData.edges.length,
+      nodesWithParent: nodesWithParent.filter(n => n.parentId).length
+    });
 
     this.panel?.webview.postMessage({
       command: 'loadGraph',
@@ -406,15 +413,21 @@ export class VisualizationPanelReact {
           popupData = {
             name: nodeDetails.name,
             type: nodeDetails.type,
-            summary: nodeDetails.summary,
+            summary: nodeDetails.summary || nodeDetails.aiSummary,
+            aiSummary: nodeDetails.aiSummary || nodeDetails.summary,
+            description: nodeDetails.description,
             details: nodeDetails.technicalDetails || `File: ${nodeDetails.relativePath}\nLines: ${nodeDetails.startLine}-${nodeDetails.endLine}\nLanguage: ${nodeDetails.language}`,
+            technicalDetails: nodeDetails.technicalDetails,
             dependencies: nodeDetails.dependencies || [],
             dependents: nodeDetails.dependents || [],
             patterns: nodeDetails.patterns || [],
+            usageExamples: nodeDetails.usageExamples || [],
+            keywords: nodeDetails.keywords || [],
             filePath: nodeDetails.filePath || node.filePath,
-            sourcePreview: signature
+            sourcePreview: signature,
+            sourceCode: nodeDetails.sourceCode
           };
-          console.log('Loaded node details from .doc_sync JSON');
+          console.log('Loaded node details from .doc_sync JSON:', nodeDetails.name);
         }
       } catch (error) {
         console.error('Failed to load node details from JSON:', error);
@@ -431,10 +444,15 @@ export class VisualizationPanelReact {
             name: ragInfo.name,
             type: ragInfo.type,
             summary: ragInfo.summary,
+            aiSummary: ragInfo.summary,
+            description: '',
             details: ragInfo.details,
+            technicalDetails: ragInfo.details,
             dependencies: ragInfo.dependencies,
             dependents: ragInfo.dependents,
             patterns: ragInfo.patterns,
+            usageExamples: [],
+            keywords: [],
             filePath: ragInfo.filePath || node.filePath,
             sourcePreview: signature
           };
@@ -450,15 +468,21 @@ export class VisualizationPanelReact {
       const dependents = this.graphBuilder.getDependents(this.currentAnalysis.graph, nodeId);
       const documentation = this.docGenerator.generateForNode(node, this.currentPersona);
       const signature = this.docGenerator.generateSignature(node);
+      const patterns = this.detectPatterns(node.sourceCode);
 
       popupData = {
         name: node.label,
         type: node.type,
         summary: documentation,
+        aiSummary: documentation,
+        description: node.documentation?.description || '',
         details: `File: ${path.basename(node.filePath)}\nLines: ${node.startLine}-${node.endLine}\nLanguage: ${node.language}`,
+        technicalDetails: `File: ${path.basename(node.filePath)}\nLines: ${node.startLine}-${node.endLine}\nLanguage: ${node.language}`,
         dependencies: dependencies.map(d => d.label),
         dependents: dependents.map(d => d.label),
-        patterns: this.detectPatterns(node.sourceCode),
+        patterns: patterns,
+        usageExamples: [],
+        keywords: [],
         filePath: node.filePath,
         sourcePreview: signature
       };
@@ -577,15 +601,17 @@ export class VisualizationPanelReact {
   updateGraph(analysis: AnalysisResult) {
     this.currentAnalysis = analysis;
     
-    console.log('Sending graph to webview:', {
+    console.log('Updating graph in webview:', {
       nodesCount: analysis.graph.nodes.length,
       edgesCount: analysis.graph.edges.length,
-      sampleNode: analysis.graph.nodes[0]
+      sampleNode: analysis.graph.nodes[0]?.label
     });
     
     if (this.webviewReady) {
       this.sendGraphData();
-      console.log('Graph data sent to webview immediately');
+      // Also send current branch info to keep UI in sync
+      this.sendCurrentBranchInfo();
+      console.log('Graph data and branch info sent to webview');
     } else {
       console.log('Webview not ready yet, will send when getGraph is requested...');
       // The sendGraphData will be called when webview requests graph

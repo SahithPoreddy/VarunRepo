@@ -191,14 +191,14 @@ export class CodebaseDocGenerator {
 
   /**
    * Generate documentation for all components using LiteLLM
-   * Processes in batches to avoid rate limits
+   * Processes in batches with high parallelism for speed
    */
   private async generateComponentDocsWithLLM(
     nodes: CodeNode[],
     edges: CodeEdge[]
   ): Promise<ComponentDoc[]> {
     const componentDocs: ComponentDoc[] = [];
-    const batchSize = 5; // Process 5 nodes at a time
+    const batchSize = 10; // Process 10 nodes at a time for speed
     const totalNodes = nodes.length;
 
     // Show progress
@@ -220,13 +220,18 @@ export class CodebaseDocGenerator {
           message: `Processing ${i + 1}-${Math.min(i + batchSize, totalNodes)} of ${totalNodes} (${progressPercent}%)`
         });
 
-        // Process batch in parallel
+        // Process batch in parallel with timeout
         const batchResults = await Promise.all(
           batch.map(async (node) => {
             try {
-              return await this.generateComponentDocWithLLM(node, edges, nodes);
+              // Use a shorter timeout for each node
+              const timeoutPromise = new Promise<ComponentDoc>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 5000)
+              );
+              const docPromise = this.generateComponentDocWithLLM(node, edges, nodes);
+              return await Promise.race([docPromise, timeoutPromise]);
             } catch (error) {
-              console.error(`LLM failed for ${node.label}, falling back:`, error);
+              // Fast fallback to rule-based
               return this.generateComponentDoc(node, edges, nodes);
             }
           })
@@ -234,9 +239,9 @@ export class CodebaseDocGenerator {
 
         componentDocs.push(...batchResults);
 
-        // Small delay to avoid rate limiting
+        // Minimal delay between batches
         if (i + batchSize < nodes.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
     });
@@ -246,7 +251,7 @@ export class CodebaseDocGenerator {
 
   /**
    * Generate documentation for all components using the AI Agent (LangChain)
-   * Uses multi-step reasoning for intelligent documentation
+   * Uses parallel processing with batching for speed
    */
   private async generateComponentDocsWithAgent(
     nodes: CodeNode[],
@@ -254,6 +259,7 @@ export class CodebaseDocGenerator {
   ): Promise<ComponentDoc[]> {
     const componentDocs: ComponentDoc[] = [];
     const totalNodes = nodes.length;
+    const batchSize = 5; // Process 5 nodes in parallel with agent
 
     // Show progress
     await vscode.window.withProgress({
@@ -261,55 +267,56 @@ export class CodebaseDocGenerator {
       title: '🧠 AI Agent Generating Documentation',
       cancellable: true
     }, async (progress, token) => {
-      for (let i = 0; i < nodes.length; i++) {
+      for (let i = 0; i < nodes.length; i += batchSize) {
         if (token.isCancellationRequested) {
           vscode.window.showWarningMessage('Documentation generation cancelled');
           break;
         }
 
-        const node = nodes[i];
+        const batch = nodes.slice(i, i + batchSize);
         const progressPercent = Math.round((i / totalNodes) * 100);
         progress.report({ 
-          increment: (1 / totalNodes) * 100,
-          message: `Analyzing ${node.label} (${i + 1}/${totalNodes} - ${progressPercent}%)`
+          increment: (batchSize / totalNodes) * 100,
+          message: `Analyzing ${i + 1}-${Math.min(i + batchSize, totalNodes)} of ${totalNodes} (${progressPercent}%)`
         });
 
-        try {
-          // Use the AI Agent for intelligent documentation
-          const agentDoc = await this.agent.generateDocumentation(node, edges, nodes);
-          
-          // Get base doc with dependencies info
-          const baseDoc = this.generateComponentDoc(node, edges, nodes);
-          
-          // Merge agent insights with base doc
-          componentDocs.push({
-            ...baseDoc,
-            summary: agentDoc.summary || baseDoc.summary,
-            aiSummary: agentDoc.summary,
-            description: agentDoc.description,
-            technicalDetails: agentDoc.technicalDetails,
-            usageExamples: agentDoc.usageExamples,
-            keywords: agentDoc.keywords,
-            personaSpecific: agentDoc.personaSpecific
-          });
-        } catch (error) {
-          console.error(`Agent failed for ${node.label}, falling back:`, error);
-          // Fall back to LLM or rule-based
-          if (this.useLLM) {
+        // Process batch in parallel with timeout
+        const batchResults = await Promise.all(
+          batch.map(async (node) => {
             try {
-              const llmDoc = await this.generateComponentDocWithLLM(node, edges, nodes);
-              componentDocs.push(llmDoc);
-            } catch {
-              componentDocs.push(this.generateComponentDoc(node, edges, nodes));
+              // Use timeout to prevent slow nodes from blocking
+              const timeoutPromise = new Promise<ComponentDoc>((_, reject) => 
+                setTimeout(() => reject(new Error('Timeout')), 8000)
+              );
+              
+              const agentPromise = (async () => {
+                const agentDoc = await this.agent.generateDocumentation(node, edges, nodes);
+                const baseDoc = this.generateComponentDoc(node, edges, nodes);
+                return {
+                  ...baseDoc,
+                  summary: agentDoc.summary || baseDoc.summary,
+                  aiSummary: agentDoc.summary,
+                  description: agentDoc.description,
+                  technicalDetails: agentDoc.technicalDetails || baseDoc.technicalDetails,
+                  usageExamples: agentDoc.usageExamples,
+                  keywords: agentDoc.keywords,
+                  personaSpecific: agentDoc.personaSpecific
+                };
+              })();
+              
+              return await Promise.race([agentPromise, timeoutPromise]);
+            } catch (error) {
+              // Fast fallback to rule-based
+              return this.generateComponentDoc(node, edges, nodes);
             }
-          } else {
-            componentDocs.push(this.generateComponentDoc(node, edges, nodes));
-          }
-        }
+          })
+        );
 
-        // Small delay to avoid rate limiting
-        if (i + 1 < nodes.length) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+        componentDocs.push(...batchResults);
+
+        // Minimal delay between batches
+        if (i + batchSize < nodes.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       }
     });

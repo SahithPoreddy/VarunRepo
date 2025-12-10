@@ -50,6 +50,16 @@
         "command": "codebase-visualizer.generateDocsWithAI",
         "title": "Generate Documentation with AI",
         "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebase-visualizer.installGitHooks",
+        "title": "Install Git Hooks",
+        "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebase-visualizer.uninstallGitHooks",
+        "title": "Uninstall Git Hooks",
+        "category": "Codebase Visualizer"
       }
     ],
     "configuration": {

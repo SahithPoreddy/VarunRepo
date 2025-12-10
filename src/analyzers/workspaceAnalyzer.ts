@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { CodeGraph, CodeNode, CodeEdge, AnalysisResult, AnalysisError } from '../types/types';
 import { JavaParser } from '../parsers/javaParser';
+import { JavaAstParser } from '../parsers/javaAstParser';
 import { ReactParser } from '../parsers/reactParser';
 import { PythonParser } from '../parsers/pythonParser';
+import { PythonAstParser } from '../parsers/pythonAstParser';
 import { GraphBuilder } from '../graph/graphBuilder';
 import { EntryPointDetector } from './entryPointDetector';
 import { ImportAnalyzer } from './importAnalyzer';
@@ -10,16 +12,21 @@ import * as path from 'path';
 
 export class WorkspaceAnalyzer {
   private javaParser: JavaParser;
+  private javaAstParser: JavaAstParser;
   private reactParser: ReactParser;
   private pythonParser: PythonParser;
+  private pythonAstParser: PythonAstParser;
   private graphBuilder: GraphBuilder;
   private entryPointDetector: EntryPointDetector;
   private importAnalyzer: ImportAnalyzer;
+  private useAstParsers: boolean = true; // Use AST parsers by default
 
   constructor() {
     this.javaParser = new JavaParser();
+    this.javaAstParser = new JavaAstParser();
     this.reactParser = new ReactParser();
     this.pythonParser = new PythonParser();
+    this.pythonAstParser = new PythonAstParser();
     this.graphBuilder = new GraphBuilder();
     this.entryPointDetector = new EntryPointDetector();
     this.importAnalyzer = new ImportAnalyzer();
@@ -104,12 +111,22 @@ export class WorkspaceAnalyzer {
         try {
           let result;
           if (ext === '.java') {
-            result = await this.javaParser.parse(fileUri, isEntryPointFile);
+            // Use AST parser for Java (better for Spring Boot)
+            if (this.useAstParsers) {
+              result = await this.javaAstParser.parse(fileUri, isEntryPointFile);
+            } else {
+              result = await this.javaParser.parse(fileUri, isEntryPointFile);
+            }
           } else if (['.tsx', '.jsx', '.ts', '.js'].includes(ext)) {
             // Pass isEntryPoint flag to create module node for files like main.tsx
             result = await this.reactParser.parse(fileUri, isEntryPointFile);
           } else if (ext === '.py') {
-            result = await this.pythonParser.parse(fileUri, isEntryPointFile);
+            // Use AST parser for Python (better hierarchy)
+            if (this.useAstParsers) {
+              result = await this.pythonAstParser.parse(fileUri, isEntryPointFile);
+            } else {
+              result = await this.pythonParser.parse(fileUri, isEntryPointFile);
+            }
           } else {
             continue;
           }
@@ -275,14 +292,24 @@ export class WorkspaceAnalyzer {
     const ext = path.extname(fileUri.fsPath);
     
     if (ext === '.java') {
-      const result = await this.javaParser.parse(fileUri);
-      return result.nodes;
+      if (this.useAstParsers) {
+        const result = await this.javaAstParser.parse(fileUri);
+        return result.nodes;
+      } else {
+        const result = await this.javaParser.parse(fileUri);
+        return result.nodes;
+      }
     } else if (['.tsx', '.jsx', '.ts', '.js'].includes(ext)) {
       const result = await this.reactParser.parse(fileUri);
       return result.nodes;
     } else if (ext === '.py') {
-      const result = await this.pythonParser.parse(fileUri);
-      return result.nodes;
+      if (this.useAstParsers) {
+        const result = await this.pythonAstParser.parse(fileUri);
+        return result.nodes;
+      } else {
+        const result = await this.pythonParser.parse(fileUri);
+        return result.nodes;
+      }
     }
     
     return [];

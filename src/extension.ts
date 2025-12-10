@@ -8,6 +8,7 @@ import { RAGService } from './rag/ragService';
 import { getLiteLLMService } from './llm/litellmService';
 import { GitWatcher } from './git/gitWatcher';
 import { FileHashCache } from './cache/fileHashCache';
+import { getHooksManager, GitHooksManager } from './git/hooksManager';
 
 let visualizationPanel: VisualizationPanelReact | undefined;
 let workspaceAnalyzer: WorkspaceAnalyzer;
@@ -17,6 +18,7 @@ let docGenerator: CodebaseDocGenerator;
 let ragService: RAGService;
 let gitWatcher: GitWatcher | undefined;
 let fileHashCache: FileHashCache | undefined;
+let gitHooksManager: GitHooksManager | undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize file logger
@@ -85,6 +87,62 @@ export async function activate(context: vscode.ExtensionContext) {
           }
         }
       });
+      
+      // Initialize git hooks manager
+      gitHooksManager = getHooksManager();
+      const hooksInitialized = await gitHooksManager.initialize(workspacePath);
+      if (hooksInitialized) {
+        // Check if hooks are already installed
+        const installedHooks = gitHooksManager.getInstalledHooks();
+        if (installedHooks.length === 0) {
+          // Offer to install hooks on first run
+          const installHooks = await vscode.window.showInformationMessage(
+            'Would you like to install Git hooks for better codebase tracking?',
+            'Install Hooks',
+            'Not Now'
+          );
+          if (installHooks === 'Install Hooks') {
+            const result = await gitHooksManager.installAllHooks();
+            if (result.success.length > 0) {
+              vscode.window.showInformationMessage(
+                `Git hooks installed: ${result.success.join(', ')}`
+              );
+            }
+          }
+        } else {
+          logger.log('Git hooks already installed', { hooks: installedHooks });
+        }
+        
+        // Start watching for hook triggers
+        const hookWatcher = gitHooksManager.startWatchingHookTriggers();
+        context.subscriptions.push(hookWatcher);
+        
+        // Listen for hook events
+        const hookEventDisposable = gitHooksManager.onHookTriggered((event) => {
+          logger.log('Git hook triggered', { type: event.type });
+          
+          // Trigger appropriate action based on hook type
+          if (event.type === 'post-commit' || event.type === 'post-merge') {
+            // Refresh the visualization after commits/merges
+            if (visualizationPanel && !visualizationPanel.isDisposed) {
+              visualizationPanel.notifyChangesDetected([]);
+            }
+          } else if (event.type === 'post-checkout') {
+            // Handle branch switch via hook
+            if (visualizationPanel && !visualizationPanel.isDisposed) {
+              gitWatcher?.getCurrentBranch().then(branch => {
+                visualizationPanel?.notifyBranchSwitch(branch || 'unknown');
+              });
+            }
+          }
+        });
+        context.subscriptions.push(hookEventDisposable);
+        context.subscriptions.push({
+          dispose: () => gitHooksManager?.dispose()
+        });
+        
+        logger.log('Git hooks manager initialized');
+      }
     } else {
       logger.log('Git watcher could not be initialized (not a git repository)');
     }
@@ -167,6 +225,43 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  // Command to install git hooks
+  const installGitHooksCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.installGitHooks',
+    async () => {
+      if (!gitHooksManager) {
+        vscode.window.showWarningMessage('Git hooks manager not initialized. Not a git repository?');
+        return;
+      }
+      
+      const result = await gitHooksManager.installAllHooks();
+      if (result.success.length > 0) {
+        vscode.window.showInformationMessage(
+          `Git hooks installed: ${result.success.join(', ')}`
+        );
+      }
+      if (result.failed.length > 0) {
+        vscode.window.showWarningMessage(
+          `Failed to install hooks: ${result.failed.join(', ')}`
+        );
+      }
+    }
+  );
+
+  // Command to uninstall git hooks
+  const uninstallGitHooksCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.uninstallGitHooks',
+    async () => {
+      if (!gitHooksManager) {
+        vscode.window.showWarningMessage('Git hooks manager not initialized.');
+        return;
+      }
+      
+      await gitHooksManager.uninstallAllHooks();
+      vscode.window.showInformationMessage('Git hooks uninstalled');
+    }
+  );
+
   context.subscriptions.push(
     showVisualizationCommand,
     refreshVisualizationCommand,
@@ -174,6 +269,8 @@ export async function activate(context: vscode.ExtensionContext) {
     openLogFileCommand,
     configureLiteLLMCommand,
     generateDocsWithAICommand,
+    installGitHooksCommand,
+    uninstallGitHooksCommand,
     logger
   );
 
