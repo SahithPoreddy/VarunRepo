@@ -1,0 +1,438 @@
+import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { CodeFlow } from './components/CodeFlow';
+import { ReactFlowProvider } from 'reactflow';
+import 'reactflow/dist/style.css';
+
+// VS Code API types
+declare const acquireVsCodeApi: any;
+const vscode = acquireVsCodeApi();
+
+interface VSCodeMessage {
+  command: string;
+  graph?: any;
+  node?: any;
+  documentation?: string;
+  dependencies?: string[];
+  dependents?: string[];
+}
+
+interface AppState {
+  nodes: any[];
+  edges: any[];
+  selectedNode: any | null;
+  documentation: string;
+  dependencies: string[];
+  dependents: string[];
+  persona: string;
+}
+
+const App: React.FC = () => {
+  const [state, setState] = useState<AppState>({
+    nodes: [],
+    edges: [],
+    selectedNode: null,
+    documentation: '',
+    dependencies: [],
+    dependents: [],
+    persona: 'developer',
+    expandedCount: 0,
+  });
+
+  const [queryText, setQueryText] = useState('');
+
+  useEffect(() => {
+    console.log('Webview app mounted, sending ready signal...');
+    
+    // Signal to extension that webview is ready
+    vscode.postMessage({ command: 'webviewReady' });
+    
+    // Handle messages from extension
+    const messageHandler = (event: MessageEvent) => {
+      const message: VSCodeMessage = event.data;
+
+      switch (message.command) {
+        case 'updateGraph':
+          console.log('✅ Received graph update:', {
+            nodesCount: message.graph?.nodes?.length || 0,
+            edgesCount: message.graph?.edges?.length || 0,
+            hasNodes: !!message.graph?.nodes
+          });
+          if (message.graph) {
+            console.log('Graph nodes:', message.graph.nodes);
+            setState(prev => ({
+              ...prev,
+              nodes: message.graph.nodes || [],
+              edges: message.graph.edges || [],
+            }));
+          } else {
+            console.error('⚠️ No graph data in message!');
+          }
+          break;
+
+        case 'showNodeDetails':
+          setState(prev => ({
+            ...prev,
+            selectedNode: message.node,
+            documentation: message.documentation || '',
+            dependencies: message.dependencies || [],
+            dependents: message.dependents || [],
+          }));
+          break;
+      }
+    };
+
+    window.addEventListener('message', messageHandler);
+    return () => window.removeEventListener('message', messageHandler);
+  }, []);
+
+  const handleNodeClick = (node: any) => {
+    vscode.postMessage({
+      command: 'nodeClicked',
+      nodeId: node.id,
+    });
+  };
+
+  const handlePersonaChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const newPersona = event.target.value;
+    setState(prev => ({ ...prev, persona: newPersona }));
+    vscode.postMessage({
+      command: 'changePersona',
+      persona: newPersona,
+    });
+  };
+
+  const handleSendToCline = () => {
+    if (state.selectedNode && queryText.trim()) {
+      vscode.postMessage({
+        command: 'sendToCline',
+        nodeId: state.selectedNode.id,
+        query: queryText,
+      });
+      setQueryText('');
+    }
+  };
+
+  const handleOpenFile = () => {
+    if (state.selectedNode) {
+      vscode.postMessage({
+        command: 'openFile',
+        filePath: state.selectedNode.filePath,
+        line: state.selectedNode.startLine,
+      });
+    }
+  };
+
+  const handleRefresh = () => {
+    vscode.postMessage({ command: 'refreshGraph' });
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', width: '100%', background: '#ffffff' }}>
+      {/* Main Graph Area */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          zIndex: 1000,
+          background: 'white',
+          padding: '10px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center',
+        }}>
+          <label style={{ fontSize: '13px', fontWeight: '500' }}>Persona:</label>
+          <select 
+            value={state.persona}
+            onChange={handlePersonaChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: '4px',
+              border: '1px solid #ddd',
+              fontSize: '13px',
+            }}
+          >
+            <option value="developer">👨‍💻 Developer</option>
+            <option value="product-manager">📊 Product Manager</option>
+            <option value="architect">🏗️ Architect</option>
+            <option value="business-analyst">📈 Business Analyst</option>
+          </select>
+          <button onClick={handleRefresh} style={{
+            padding: '6px 12px',
+            borderRadius: '4px',
+            border: '1px solid #ddd',
+            background: 'white',
+            cursor: 'pointer',
+            fontSize: '13px',
+          }}>
+            🔄 Refresh
+          </button>
+        </div>
+        
+        <ReactFlowProvider>
+          {state.nodes.length === 0 ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              flexDirection: 'column',
+              gap: '10px',
+              color: '#64748b',
+              fontSize: '14px',
+            }}>
+              <div style={{ fontSize: '48px' }}>📊</div>
+              <div style={{ fontWeight: '500' }}>No code nodes found</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                Make sure your workspace contains Java or TypeScript/React files
+              </div>
+            </div>
+          ) : (
+            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+              <div style={{
+                position: 'absolute',
+                top: '60px',
+                left: '10px',
+                zIndex: 999,
+                background: '#eff6ff',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '2px solid #3b82f6',
+                fontSize: '13px',
+                color: '#1e40af',
+                fontWeight: '600',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}>
+                <span>💡 Click <span style={{ background: '#2563eb', color: 'white', padding: '3px 8px', borderRadius: '12px', fontWeight: 'bold', fontSize: '14px' }}>+</span> to expand dependencies</span>
+                {state.expandedCount > 0 && (
+                  <button
+                    style={{
+                      background: '#dc2626',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    }}
+                    onClick={() => {
+                      setState(prev => ({ ...prev, expandedCount: 0 }));
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#b91c1c';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#dc2626';
+                    }}
+                  >
+                    Collapse All ({state.expandedCount})
+                  </button>
+                )}
+              </div>
+                  <button
+                    style={{
+                      background: '#dc2626',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                    }}
+                    onClick={() => {
+                      // Send message to collapse all
+                      window.postMessage({ type: 'collapseAll' }, '*');
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#b91c1c';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#dc2626';
+                    }}
+                  >
+                    Collapse All ({state.expandedCount})
+                  </button>
+                )}
+              </div>
+              <CodeFlow
+                nodes={state.nodes}
+                edges={state.edges}
+                onNodeClick={handleNodeClick}
+                onExpandedCountChange={(count) => {
+                  setState(prev => ({ ...prev, expandedCount: count }));
+                }}
+                collapseAllTrigger={state.expandedCount === 0 ? Date.now() : undefined}
+              />
+            </div>
+          )}
+        </ReactFlowProvider>
+      </div>
+
+      {/* Sidebar */}
+      <div style={{
+        width: '400px',
+        borderLeft: '1px solid #e5e7eb',
+        background: 'white',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {state.selectedNode ? (
+          <div style={{ padding: '20px' }}>
+            <h2 style={{ margin: '0 0 15px 0', fontSize: '18px', fontWeight: '600' }}>
+              {state.selectedNode.label}
+            </h2>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                marginRight: '8px',
+                background: '#e0e7ff',
+                color: '#3730a3',
+                fontWeight: '500',
+              }}>
+                {state.selectedNode.type}
+              </span>
+              <span style={{
+                display: 'inline-block',
+                padding: '4px 10px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                background: '#dbeafe',
+                color: '#1e40af',
+                fontWeight: '500',
+              }}>
+                {state.selectedNode.language}
+              </span>
+            </div>
+
+            <div style={{ fontSize: '13px', marginBottom: '20px', color: '#64748b' }}>
+              <div><strong>File:</strong> {state.selectedNode.filePath}</div>
+              <div><strong>Lines:</strong> {state.selectedNode.startLine}-{state.selectedNode.endLine}</div>
+            </div>
+
+            <div style={{
+              fontSize: '14px',
+              lineHeight: '1.6',
+              marginBottom: '20px',
+              padding: '15px',
+              background: '#f8fafc',
+              borderRadius: '6px',
+              whiteSpace: 'pre-wrap',
+            }}>
+              {state.documentation || 'No documentation available.'}
+            </div>
+
+            {state.dependencies.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+                  Dependencies ({state.dependencies.length})
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
+                  {state.dependencies.map((dep, i) => (
+                    <li key={i} style={{ marginBottom: '4px' }}>{dep}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {state.dependents.length > 0 && (
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+                  Used By ({state.dependents.length})
+                </h3>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px' }}>
+                  {state.dependents.map((dep, i) => (
+                    <li key={i} style={{ marginBottom: '4px' }}>{dep}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div style={{
+              paddingTop: '20px',
+              borderTop: '1px solid #e5e7eb',
+            }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '10px' }}>
+                Modify with Cline
+              </h3>
+              <textarea
+                value={queryText}
+                onChange={(e) => setQueryText(e.target.value)}
+                placeholder="Enter your modification request..."
+                style={{
+                  width: '100%',
+                  minHeight: '80px',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                }}
+              />
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button onClick={handleSendToCline} style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: '#3b82f6',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                }}>
+                  🤖 Send to Cline
+                </button>
+                <button onClick={handleOpenFile} style={{
+                  flex: 1,
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                }}>
+                  📄 Open File
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#94a3b8',
+            fontSize: '14px',
+          }}>
+            Click on a node to see details
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Mount the app
+const container = document.getElementById('root');
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
+}

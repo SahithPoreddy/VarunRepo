@@ -1,0 +1,350 @@
+import * as vscode from 'vscode';
+import { VisualizationPanelReact } from './webview/visualizationPanelReact';
+import { WorkspaceAnalyzer } from './analyzers/workspaceAnalyzer';
+import { ClineAdapter } from './cline/adapter';
+import { FileLogger } from './utils/fileLogger';
+import { CodebaseDocGenerator } from './documentation/codebaseDocGenerator';
+import { RAGService } from './rag/ragService';
+import { getLiteLLMService } from './llm/litellmService';
+import { GitWatcher } from './git/gitWatcher';
+import { FileHashCache } from './cache/fileHashCache';
+
+let visualizationPanel: VisualizationPanelReact | undefined;
+let workspaceAnalyzer: WorkspaceAnalyzer;
+let clineAdapter: ClineAdapter;
+let logger: FileLogger;
+let docGenerator: CodebaseDocGenerator;
+let ragService: RAGService;
+let gitWatcher: GitWatcher | undefined;
+let fileHashCache: FileHashCache | undefined;
+
+export async function activate(context: vscode.ExtensionContext) {
+  // Initialize file logger
+  logger = new FileLogger(context);
+  logger.log('Codebase Visualizer extension activated');
+  
+  console.log('Codebase Visualizer extension activated');
+
+  // Initialize services
+  workspaceAnalyzer = new WorkspaceAnalyzer();
+  clineAdapter = new ClineAdapter();
+  docGenerator = new CodebaseDocGenerator();
+  ragService = new RAGService();
+  
+  // Initialize GitWatcher for file change detection with branch awareness
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    const workspacePath = workspaceFolders[0].uri.fsPath;
+    
+    // Initialize file hash cache (singleton pattern)
+    const { getFileHashCache } = await import('./cache/fileHashCache');
+    fileHashCache = getFileHashCache();
+    await fileHashCache.initialize(workspacePath);
+    logger.log('File hash cache initialized');
+    
+    // Initialize git watcher with integrated branch manager
+    gitWatcher = new GitWatcher();
+    const initialized = await gitWatcher.initialize(workspacePath);
+    
+    if (initialized) {
+      // Listen for file changes using the callback registration
+      const gitChangeDisposable = gitWatcher.onGitChange((event) => {
+        logger.log('Git event detected', { 
+          type: event.type, 
+          branch: event.branch,
+          count: event.files.length, 
+          files: event.files.slice(0, 5) // Log first 5 files
+        });
+        
+        // Handle branch switches specially
+        if (event.type === 'branch-switch') {
+          logger.log(`Branch switched to: ${event.branch}`);
+          // On branch switch, we may need to update or restore cached graph
+          if (visualizationPanel && !visualizationPanel.isDisposed) {
+            visualizationPanel.notifyBranchSwitch(event.branch || 'unknown');
+          }
+        } else {
+          // Notify visualization panel about file changes
+          if (visualizationPanel && !visualizationPanel.isDisposed) {
+            visualizationPanel.notifyChangesDetected(event.files);
+          }
+        }
+      });
+      
+      // Start watching
+      gitWatcher.startWatching();
+      const currentBranch = await gitWatcher.getCurrentBranch();
+      logger.log('Git watcher started', { branch: currentBranch });
+      
+      // Add disposables
+      context.subscriptions.push(gitChangeDisposable);
+      context.subscriptions.push({
+        dispose: () => {
+          if (gitWatcher) {
+            gitWatcher.dispose();
+          }
+        }
+      });
+    } else {
+      logger.log('Git watcher could not be initialized (not a git repository)');
+    }
+  }
+  
+  // Show log file location
+  logger.log('Extension services initialized');
+  logger.log('Log file location', { path: logger.getLogFilePath() });
+
+  // Register commands
+  const showVisualizationCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.showVisualization',
+    async () => {
+      await showVisualization(context);
+    }
+  );
+
+  const refreshVisualizationCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.refreshVisualization',
+    async () => {
+      if (visualizationPanel) {
+        await refreshVisualization();
+      } else {
+        vscode.window.showWarningMessage('Visualization panel is not open');
+      }
+    }
+  );
+
+  const changePersonaCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.changePersona',
+    async () => {
+      await changePersona();
+    }
+  );
+
+  const openLogFileCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.openLogFile',
+    async () => {
+      const logPath = logger.getLogFilePath();
+      const document = await vscode.workspace.openTextDocument(logPath);
+      await vscode.window.showTextDocument(document);
+      vscode.window.showInformationMessage(`Log file: ${logPath}`);
+    }
+  );
+
+  // Command to configure LiteLLM
+  const configureLiteLLMCommand = vscode.commands.registerCommand(
+    'codebase-visualizer.configureLiteLLM',
+    async () => {
+      const litellm = getLiteLLMService();
+      const configured = await litellm.promptForConfiguration();
+      if (configured) {
+        vscode.window.showInformationMessage('✅ LiteLLM configured successfully! AI-powered documentation is now enabled.');
+      }
+    }
+  );
+
+  // Command to generate docs with AI
+  const generateDocsWithAICommand = vscode.commands.registerCommand(
+    'codebase-visualizer.generateDocsWithAI',
+    async () => {
+      const litellm = getLiteLLMService();
+      
+      if (!litellm.isReady()) {
+        const configure = await vscode.window.showWarningMessage(
+          'LiteLLM is not configured. Would you like to set it up now?',
+          'Configure',
+          'Cancel'
+        );
+        if (configure === 'Configure') {
+          await litellm.promptForConfiguration();
+        }
+        if (!litellm.isReady()) {
+          return;
+        }
+      }
+
+      // Re-analyze and generate docs with AI
+      await showVisualization(context, true);
+    }
+  );
+
+  context.subscriptions.push(
+    showVisualizationCommand,
+    refreshVisualizationCommand,
+    changePersonaCommand,
+    openLogFileCommand,
+    configureLiteLLMCommand,
+    generateDocsWithAICommand,
+    logger
+  );
+
+  // Check if Cline is available
+  const clineExtension = vscode.extensions.getExtension('saoudrizwan.claude-dev');
+  if (!clineExtension) {
+    vscode.window.showWarningMessage(
+      'Cline extension not found. Code modification features will be disabled. Install Cline from the marketplace.',
+      'Install Cline'
+    ).then(selection => {
+      if (selection === 'Install Cline') {
+        vscode.commands.executeCommand('workbench.extensions.search', 'saoudrizwan.claude-dev');
+      }
+    });
+  }
+}
+
+async function showVisualization(context: vscode.ExtensionContext, useAI: boolean = false) {
+  logger.log('\n' + '='.repeat(80));
+  logger.log('showVisualization command triggered', { useAI });
+  
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  
+  if (!workspaceFolders || workspaceFolders.length === 0) {
+    logger.error('No workspace folder open');
+    vscode.window.showErrorMessage('Please open a workspace folder first');
+    return;
+  }
+  
+  const workspaceUri = workspaceFolders[0].uri;
+  logger.log('Workspace folder', { path: workspaceUri.fsPath });
+
+  // Check if LiteLLM is available when useAI is requested
+  const litellm = getLiteLLMService();
+  const llmEnabled = useAI && litellm.isReady();
+  if (useAI && !litellm.isReady()) {
+    logger.log('LiteLLM not configured, using rule-based documentation');
+  }
+
+  // Show progress
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: llmEnabled ? 'Analyzing Codebase with AI' : 'Analyzing Codebase',
+      cancellable: false
+    },
+    async (progress) => {
+      progress.report({ increment: 0, message: 'Starting analysis...' });
+      logger.log('Starting workspace analysis...');
+
+      // Analyze workspace
+      let analysisResult;
+      try {
+        analysisResult = await workspaceAnalyzer.analyze(workspaceUri);
+        logger.log('Workspace analysis completed successfully');
+      } catch (error) {
+        logger.error('Workspace analysis failed', error);
+        throw error;
+      }
+
+      progress.report({ increment: 30, message: llmEnabled ? 'Generating AI documentation...' : 'Generating documentation...' });
+      
+      // Generate codebase documentation
+      let documentation;
+      try {
+        documentation = await docGenerator.generateCodebaseDocs(analysisResult, workspaceUri, llmEnabled);
+        const llmStatus = documentation.generatedWithLLM ? '🤖 AI-powered' : '📝 Rule-based';
+        logger.log('Documentation generated', { 
+          folder: docGenerator.getDocsFolder(),
+          components: documentation.components.length,
+          generatedWithLLM: documentation.generatedWithLLM
+        });
+        vscode.window.showInformationMessage(
+          `📚 ${llmStatus} documentation generated in .doc_sync folder (${documentation.components.length} components)`
+        );
+      } catch (error) {
+        logger.error('Documentation generation failed', error);
+        // Continue without docs
+      }
+
+      progress.report({ increment: 50, message: 'Indexing for RAG...' });
+      
+      // Initialize RAG service and index documents
+      try {
+        await ragService.initialize(workspaceUri);
+        
+        if (documentation) {
+          const ragChunks = docGenerator.generateRAGChunks(documentation);
+          await ragService.indexDocuments(ragChunks);
+          logger.log('RAG indexing complete', { 
+            chunks: ragChunks.length,
+            usingLocalFallback: ragService.isUsingLocalFallback()
+          });
+        }
+      } catch (error) {
+        logger.error('RAG indexing failed', error);
+        // Continue without RAG
+      }
+
+      progress.report({ increment: 70, message: 'Building visualization...' });
+
+      // Create or show visualization panel
+      if (visualizationPanel && !visualizationPanel.isDisposed) {
+        visualizationPanel.show();
+      } else {
+        // Create new panel
+        visualizationPanel = new VisualizationPanelReact(context, clineAdapter, ragService);
+        
+        // Set callback to clear reference when panel is closed
+        visualizationPanel.onDispose = () => {
+          visualizationPanel = undefined;
+          logger.log('Visualization panel disposed');
+        };
+      }
+
+      // Update panel with analysis results
+      const resultSummary = {
+        nodes: analysisResult.graph.nodes.length,
+        edges: analysisResult.graph.edges.length,
+        errors: analysisResult.errors.length,
+        warnings: analysisResult.warnings.length,
+        entryPoints: analysisResult.graph.metadata.entryPoints?.length || 0
+      };
+      
+      logger.log('Analysis complete', resultSummary);
+      console.log('Analysis complete:', resultSummary);
+      
+      if (analysisResult.graph.nodes.length === 0) {
+        logger.error('WARNING: No nodes found in analysis!');
+        logger.log('Analysis warnings', analysisResult.warnings);
+        logger.log('Analysis errors', analysisResult.errors);
+      } else {
+        logger.log('Sample nodes', analysisResult.graph.nodes.slice(0, 3));
+      }
+      
+      logger.log('Updating visualization panel with graph data...');
+      visualizationPanel.updateGraph(analysisResult);
+      logger.log('Graph update sent to panel');
+
+      progress.report({ increment: 100, message: 'Done!' });
+    }
+  );
+}
+
+async function refreshVisualization() {
+  if (!visualizationPanel) return;
+
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (!workspaceFolders || workspaceFolders.length === 0) return;
+
+  const analysisResult = await workspaceAnalyzer.analyze(workspaceFolders[0].uri);
+  visualizationPanel.updateGraph(analysisResult);
+}
+
+async function changePersona() {
+  const personas = [
+    { label: '👨‍💻 Developer', value: 'developer', description: 'Technical implementation details' },
+    { label: '📊 Product Manager', value: 'product-manager', description: 'Business features and user stories' },
+    { label: '🏗️ Architect', value: 'architect', description: 'System design and patterns' },
+    { label: '📈 Business Analyst', value: 'business-analyst', description: 'Process flows and requirements' }
+  ];
+
+  const selected = await vscode.window.showQuickPick(personas, {
+    placeHolder: 'Select documentation persona'
+  });
+
+  if (selected) {
+    vscode.window.showInformationMessage(`Persona changed to ${selected.label}`);
+  }
+}
+
+export function deactivate() {
+  console.log('Codebase Visualizer extension deactivated');
+}
