@@ -125,7 +125,7 @@ interface GraphData {
 interface NodeData {
   id: string;
   label: string;
-  type: 'file' | 'class' | 'function' | 'method' | 'component' | 'module' | 'entry' | 'package';
+  type: 'file' | 'class' | 'function' | 'method' | 'component' | 'module' | 'entry' | 'package' | 'interface' | 'enum' | 'field' | 'decorator';
   filePath?: string;
   description?: string;
   parentId?: string;
@@ -2010,64 +2010,111 @@ const App = () => {
     return childIds;
   }, [childrenMap]);
 
-  // Get root nodes - prioritize SINGLE entry point for clean hierarchy
-  // Order of priority: index.js/main.tsx > App component > entry type > no parents
+  // Get root nodes - prioritize nodes with children so users can expand
+  // If a node has no children, show multiple roots or find expandable nodes
+  // Detect project type based on nodes
+  const projectType = useMemo(() => {
+    if (!graphData) return 'unknown';
+    
+    // Check for React/JS project indicators
+    const hasReactIndicators = graphData.nodes.some(n => {
+      const label = n.label.toLowerCase();
+      return n.type === 'component' || 
+             label.includes('index') || 
+             label.includes('.tsx') || 
+             label.includes('.jsx') ||
+             n.type === 'module';
+    });
+    
+    // Check for Java project indicators
+    const hasJavaIndicators = graphData.nodes.some(n => 
+      n.type === 'class' || n.type === 'interface' || n.type === 'enum'
+    );
+    
+    // Check for Python project indicators
+    const hasPythonIndicators = graphData.nodes.some(n => {
+      const label = n.label.toLowerCase();
+      return label.includes('.py') || n.type === 'module';
+    });
+    
+    if (hasReactIndicators && !hasJavaIndicators) return 'react';
+    if (hasJavaIndicators) return 'java';
+    if (hasPythonIndicators) return 'python';
+    return 'unknown';
+  }, [graphData]);
+
+  // Get root nodes based on project type
   const rootNodes = useMemo(() => {
     if (!graphData) return [];
     
-    // Priority 1: Look for index.js, index.tsx, main.tsx, main.js, main.py, App.java
-    const primaryEntries = graphData.nodes.filter(n => {
-      const label = n.label.toLowerCase();
-      return label === 'index' || label === 'main' || label === 'app' ||
-             label.includes('index.') || label.includes('main.') ||
-             n.type === 'entry' || n.type === 'module';
-    });
-    
-    // Sort to prioritize: index > main > app > module > entry
-    const sortedEntries = primaryEntries.sort((a, b) => {
-      const aLabel = a.label.toLowerCase();
-      const bLabel = b.label.toLowerCase();
-      const priority = (label: string, type: string) => {
-        if (label.includes('index')) return 1;
-        if (label.includes('main')) return 2;
-        if (label.includes('app')) return 3;
-        if (type === 'module') return 4;
-        if (type === 'entry') return 5;
-        return 6;
-      };
-      return priority(aLabel, a.type) - priority(bLabel, b.type);
-    });
-    
-    // Return ONLY the single best entry point if found
-    if (sortedEntries.length > 0) {
-      console.log('Primary root node:', sortedEntries[0].label);
-      return [sortedEntries[0]];
-    }
-    
-    // Priority 2: Nodes that are not children of any other node
-    const nonChildNodes = graphData.nodes.filter(node => !childNodeIds.has(node.id));
-    if (nonChildNodes.length > 0) {
-      // If too many roots, try to pick just one (first component or class)
-      if (nonChildNodes.length > 3) {
-        const bestRoot = nonChildNodes.find(n => 
-          n.type === 'component' || n.type === 'class' || n.type === 'module'
-        ) || nonChildNodes[0];
-        console.log('Single root from non-children:', bestRoot.label);
-        return [bestRoot];
+    // === JAVA PROJECT: Show all classes as roots ===
+    if (projectType === 'java') {
+      const classNodes = graphData.nodes.filter(n => 
+        n.type === 'class' || n.type === 'interface' || n.type === 'enum'
+      );
+      
+      if (classNodes.length > 0) {
+        console.log('Java project: showing all classes as roots:', classNodes.map(n => n.label));
+        return classNodes;
       }
-      return nonChildNodes;
+      
+      // Fallback: show all top-level nodes
+      const topLevel = graphData.nodes.filter(n => !n.parentId);
+      return topLevel.length > 0 ? topLevel : graphData.nodes;
     }
     
-    // Priority 3: Nodes without parentId
+    // === REACT PROJECT: Use entry point hierarchy (index > main > App) ===
+    if (projectType === 'react') {
+      const primaryEntries = graphData.nodes.filter(n => {
+        const label = n.label.toLowerCase();
+        return label === 'index' || label === 'main' || label === 'app' ||
+               label.includes('index.') || label.includes('main.') ||
+               n.type === 'entry' || n.type === 'module';
+      });
+      
+      // Sort to prioritize: index > main > app > module > entry
+      const sortedEntries = primaryEntries.sort((a, b) => {
+        const aLabel = a.label.toLowerCase();
+        const bLabel = b.label.toLowerCase();
+        const priority = (label: string, type: string) => {
+          if (label.includes('index')) return 1;
+          if (label.includes('main')) return 2;
+          if (label.includes('app')) return 3;
+          if (type === 'module') return 4;
+          if (type === 'entry') return 5;
+          return 6;
+        };
+        return priority(aLabel, a.type) - priority(bLabel, b.type);
+      });
+      
+      if (sortedEntries.length > 0) {
+        console.log('React project: primary root node:', sortedEntries[0].label);
+        return [sortedEntries[0]];
+      }
+    }
+    
+    // === PYTHON PROJECT: Show modules and classes as roots ===
+    if (projectType === 'python') {
+      const moduleOrClass = graphData.nodes.filter(n => 
+        n.type === 'module' || n.type === 'class'
+      );
+      
+      if (moduleOrClass.length > 0) {
+        console.log('Python project: showing modules/classes as roots');
+        return moduleOrClass;
+      }
+    }
+    
+    // === DEFAULT: Show nodes without parents ===
     const noParentNodes = graphData.nodes.filter(node => !node.parentId);
     if (noParentNodes.length > 0) {
-      return noParentNodes.length > 3 ? [noParentNodes[0]] : noParentNodes;
+      console.log('Default: showing nodes without parents');
+      return noParentNodes;
     }
     
-    // Final fallback: first node
-    console.log('Fallback to first node');
-    return graphData.nodes.length > 0 ? [graphData.nodes[0]] : [];
-  }, [graphData, childNodeIds]);
+    // Final fallback
+    return graphData.nodes;
+  }, [graphData, projectType, childNodeIds]);
 
   // Get visible nodes based on expanded state (collapsible tree logic)
   const visibleNodeIds = useMemo(() => {

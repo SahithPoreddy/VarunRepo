@@ -299,8 +299,11 @@ export class VisualizationPanelReact {
         // Send updated graph to webview
         this.sendGraphData();
         
+        // Also regenerate documentation for the updated graph
+        await this.regenerateDocsAfterSync();
+        
         vscode.window.showInformationMessage(
-          `🔄 Synced: ${result.nodesAdded} added, ${result.nodesModified} modified, ${result.nodesRemoved} removed`
+          `🔄 Synced: ${result.nodesAdded} added, ${result.nodesModified} modified, ${result.nodesRemoved} removed. Docs updated.`
         );
       } else {
         vscode.window.showInformationMessage('✅ No changes detected. Graph is up to date.');
@@ -319,6 +322,36 @@ export class VisualizationPanelReact {
       console.error('Failed to sync changes:', error);
       this.panel?.webview.postMessage({ command: 'syncError' });
       vscode.window.showErrorMessage(`Failed to sync changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Regenerate documentation after sync changes (lightweight, no AI by default)
+   */
+  private async regenerateDocsAfterSync() {
+    if (!this.currentAnalysis) return;
+    
+    try {
+      const { CodebaseDocGenerator } = await import('../documentation/codebaseDocGenerator');
+      const docGenerator = new CodebaseDocGenerator();
+      
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) return;
+      
+      // Generate docs without AI for speed (rule-based only)
+      await docGenerator.generateCodebaseDocs(
+        this.currentAnalysis,
+        workspaceFolders[0].uri,
+        false // Don't use AI for auto-sync - faster
+      );
+      
+      // Reload and send updated docs to webview
+      await this.loadAndSendDocs();
+      
+      console.log('Documentation regenerated after sync');
+    } catch (error) {
+      console.error('Failed to regenerate docs after sync:', error);
+      // Don't show error to user - docs regeneration is secondary
     }
   }
 
@@ -689,6 +722,14 @@ export class VisualizationPanelReact {
       count: changedFiles.length,
       files: changedFiles
     });
+  }
+
+  /**
+   * Reload and send documentation to webview (public method for external calls)
+   */
+  public async reloadDocs() {
+    if (this._isDisposed || !this.panel) return;
+    await this.loadAndSendDocs();
   }
 
   /**

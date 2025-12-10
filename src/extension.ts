@@ -118,17 +118,19 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(hookWatcher);
         
         // Listen for hook events
-        const hookEventDisposable = gitHooksManager.onHookTriggered((event) => {
+        const hookEventDisposable = gitHooksManager.onHookTriggered(async (event) => {
           logger.log('Git hook triggered', { type: event.type });
           
           // Trigger appropriate action based on hook type
           if (event.type === 'post-commit' || event.type === 'post-merge') {
-            // Refresh the visualization after commits/merges
+            // Refresh the visualization AND docs after commits/merges
             if (visualizationPanel && !visualizationPanel.isDisposed) {
               visualizationPanel.notifyChangesDetected([]);
+              // Trigger full refresh which now includes docs regeneration
+              await refreshVisualization();
             }
           } else if (event.type === 'post-checkout') {
-            // Handle branch switch via hook
+            // Handle branch switch via hook - triggers full refresh with docs
             if (visualizationPanel && !visualizationPanel.isDisposed) {
               gitWatcher?.getCurrentBranch().then(branch => {
                 visualizationPanel?.notifyBranchSwitch(branch || 'unknown');
@@ -423,6 +425,19 @@ async function refreshVisualization() {
 
   const analysisResult = await workspaceAnalyzer.analyze(workspaceFolders[0].uri);
   visualizationPanel.updateGraph(analysisResult);
+  
+  // Also regenerate documentation for the updated graph
+  try {
+    await docGenerator.generateCodebaseDocs(
+      analysisResult,
+      workspaceFolders[0].uri,
+      false // Use rule-based for auto-refresh (faster)
+    );
+    // Notify panel to reload docs
+    visualizationPanel.reloadDocs();
+  } catch (error) {
+    console.error('Failed to regenerate docs on refresh:', error);
+  }
 }
 
 async function changePersona() {

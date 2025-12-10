@@ -114,26 +114,36 @@ export class IncrementalGraphUpdater {
         nodesRemoved += this.removeNodesForFile(deletedFile, removedNodeIds);
       }
 
-      // Process added files
-      onProgress?.('Adding new nodes...', 40);
+      // Process added files - RE-ANALYZE each new file
+      onProgress?.('Analyzing new files...', 40);
       for (const addedFile of changes.added) {
-        const newNodes = this.getNodesForFile(fullAnalysisResult.graph, addedFile);
-        nodesAdded += this.addNodes(newNodes);
-        this.hashCache.updateEntry(addedFile, newNodes.map(n => n.id));
+        try {
+          const fileUri = vscode.Uri.file(addedFile);
+          const newNodes = await this.workspaceAnalyzer.analyzeFile(fileUri);
+          nodesAdded += this.addNodes(newNodes);
+          this.hashCache.updateEntry(addedFile, newNodes.map(n => n.id));
+        } catch (error) {
+          console.error(`Failed to analyze new file ${addedFile}:`, error);
+        }
       }
 
-      // Process modified files
-      onProgress?.('Updating modified nodes...', 60);
+      // Process modified files - RE-ANALYZE each modified file
+      onProgress?.('Analyzing modified files...', 60);
       for (const modifiedFile of changes.modified) {
-        const updatedNodes = this.getNodesForFile(fullAnalysisResult.graph, modifiedFile);
-        nodesModified += this.updateNodes(modifiedFile, updatedNodes);
-        this.hashCache.updateEntry(modifiedFile, updatedNodes.map(n => n.id));
+        try {
+          const fileUri = vscode.Uri.file(modifiedFile);
+          const updatedNodes = await this.workspaceAnalyzer.analyzeFile(fileUri);
+          nodesModified += this.updateNodes(modifiedFile, updatedNodes);
+          this.hashCache.updateEntry(modifiedFile, updatedNodes.map(n => n.id));
+        } catch (error) {
+          console.error(`Failed to analyze modified file ${modifiedFile}:`, error);
+        }
       }
 
       // Rebuild edges for affected files
       onProgress?.('Rebuilding edges...', 80);
       const affectedFiles = [...changes.added, ...changes.modified];
-      edgesUpdated = this.rebuildEdges(fullAnalysisResult.graph, affectedFiles);
+      edgesUpdated = await this.rebuildEdgesForAffectedFiles(affectedFiles);
 
       // Save cache
       onProgress?.('Saving cache...', 95);
@@ -260,7 +270,63 @@ export class IncrementalGraphUpdater {
   }
 
   /**
-   * Rebuild edges for affected files
+   * Rebuild edges for affected files by analyzing imports
+   */
+  private async rebuildEdgesForAffectedFiles(affectedFiles: string[]): Promise<number> {
+    if (!this.currentGraph) return 0;
+
+    const affectedFileSet = new Set(affectedFiles);
+    let addedCount = 0;
+
+    // Build a map of file paths to node IDs for quick lookup
+    const fileToNodes = new Map<string, CodeNode[]>();
+    for (const node of this.currentGraph.nodes) {
+      if (!fileToNodes.has(node.filePath)) {
+        fileToNodes.set(node.filePath, []);
+      }
+      fileToNodes.get(node.filePath)!.push(node);
+    }
+
+    // For each affected file, find edges to other files based on node relationships
+    for (const filePath of affectedFiles) {
+      const nodesInFile = fileToNodes.get(filePath) || [];
+      
+      for (const node of nodesInFile) {
+        // Look for nodes that might reference this node (based on naming patterns)
+        for (const [otherPath, otherNodes] of fileToNodes) {
+          if (otherPath === filePath) continue;
+          
+          for (const otherNode of otherNodes) {
+            // Check if other node might depend on this node (simple heuristic)
+            // More sophisticated edge detection would require full import analysis
+            const key = `${otherNode.id}->${node.id}`;
+            const reverseKey = `${node.id}->${otherNode.id}`;
+            
+            const existingEdgeKeys = new Set(
+              this.currentGraph!.edges.map(e => `${e.from}->${e.to}`)
+            );
+            
+            // If nodes share similar naming or are in parent-child relationship
+            if (node.parentId === otherNode.id || otherNode.parentId === node.id) {
+              if (!existingEdgeKeys.has(key) && !existingEdgeKeys.has(reverseKey)) {
+                this.currentGraph!.edges.push({
+                  from: node.parentId === otherNode.id ? otherNode.id : node.id,
+                  to: node.parentId === otherNode.id ? node.id : otherNode.id,
+                  type: 'contains'
+                });
+                addedCount++;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return addedCount;
+  }
+
+  /**
+   * Rebuild edges for affected files (legacy method - kept for reference)
    */
   private rebuildEdges(fullGraph: CodeGraph, affectedFiles: string[]): number {
     if (!this.currentGraph) return 0;

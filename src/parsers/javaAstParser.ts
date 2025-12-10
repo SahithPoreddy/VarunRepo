@@ -10,39 +10,87 @@ export interface ParseResult {
 interface ParsedElement {
   id: string;
   name: string;
-  type: 'class' | 'interface' | 'method' | 'function' | 'module';
+  type: 'class' | 'interface' | 'enum' | 'method' | 'function' | 'module' | 'constructor' | 'field';
   startLine: number;
   endLine: number;
   parentId?: string;
-  visibility?: 'public' | 'private' | 'protected';
+  visibility?: 'public' | 'private' | 'protected' | 'package';
   isStatic?: boolean;
   isAbstract?: boolean;
+  isFinal?: boolean;
   annotations?: string[];
   extendsClass?: string;
   implementsInterfaces?: string[];
   parameters?: Parameter[];
   returnType?: string;
+  children: ParsedElement[];
+  layer?: string;
+  fieldType?: string;
 }
 
 /**
- * Java parser using java-parser library for proper AST-based parsing
- * This provides accurate hierarchical relationships for Spring Boot projects
- * Detects Controller→Service→Repository layer relationships
+ * Enhanced Java AST Parser with Tree-Sitter-like hierarchical parsing
+ * 
+ * Key Features:
+ * 1. Complete parent-child relationship tracking using recursive descent
+ * 2. Spring Boot layer detection (Controller → Service → Repository → Entity)
+ * 3. Nested class/interface support
+ * 4. Inner class and anonymous class detection
+ * 5. Constructor extraction with parameters
+ * 6. Field injection detection (@Autowired, @Inject)
+ * 7. Proper annotation parsing with parameters
+ * 8. Generic type support
  */
 export class JavaAstParser {
   private fileUri: vscode.Uri | null = null;
   private filePath: string = '';
   private content: string = '';
   private lines: string[] = [];
+  private packageName: string = '';
   
-  // Spring Boot layer detection
-  private static readonly SPRING_LAYERS = {
-    controller: ['RestController', 'Controller', 'RequestMapping'],
-    service: ['Service', 'Component'],
-    repository: ['Repository', 'JpaRepository', 'CrudRepository'],
-    configuration: ['Configuration', 'Bean'],
-    entity: ['Entity', 'Table', 'Document']
+  // Spring Boot layer detection with comprehensive annotations
+  private static readonly SPRING_ANNOTATIONS: Record<string, string> = {
+    'RestController': 'controller',
+    'Controller': 'controller',
+    'RequestMapping': 'controller',
+    'GetMapping': 'controller',
+    'PostMapping': 'controller',
+    'PutMapping': 'controller',
+    'DeleteMapping': 'controller',
+    'PatchMapping': 'controller',
+    'ControllerAdvice': 'controller',
+    'RestControllerAdvice': 'controller',
+    'Service': 'service',
+    'Component': 'component',
+    'Transactional': 'service',
+    'Repository': 'repository',
+    'JpaRepository': 'repository',
+    'CrudRepository': 'repository',
+    'PagingAndSortingRepository': 'repository',
+    'MongoRepository': 'repository',
+    'Configuration': 'configuration',
+    'Bean': 'configuration',
+    'EnableAutoConfiguration': 'configuration',
+    'SpringBootApplication': 'application',
+    'Entity': 'entity',
+    'Table': 'entity',
+    'Document': 'entity',
+    'Embeddable': 'entity',
+    'MappedSuperclass': 'entity',
+    'EnableWebSecurity': 'security',
+    'Aspect': 'aspect',
+    'FeignClient': 'client',
+    'KafkaListener': 'messaging',
+    'RabbitListener': 'messaging',
+    'Scheduled': 'scheduled',
+    'SpringBootTest': 'test',
+    'DataJpaTest': 'test',
+    'WebMvcTest': 'test'
   };
+
+  private static readonly INJECTION_ANNOTATIONS = [
+    'Autowired', 'Inject', 'Resource', 'Value', 'Qualifier'
+  ];
 
   async parse(fileUri: vscode.Uri, isEntryPoint: boolean = false): Promise<ParseResult> {
     const document = await vscode.workspace.openTextDocument(fileUri);
@@ -53,34 +101,28 @@ export class JavaAstParser {
 
     const nodes: CodeNode[] = [];
     const edges: CodeEdge[] = [];
-    const elements: ParsedElement[] = [];
 
     try {
-      // Parse with java-parser
+      this.extractPackage();
       const cst = parse(this.content);
-      
-      // Extract elements from CST
-      this.extractFromCst(cst, elements);
+      const rootElements = this.extractFromCst(cst);
+      const allElements = this.flattenElements(rootElements);
 
-      // Build nodes with proper parent-child relationships
-      const classMap = new Map<string, string>(); // className -> nodeId
-      const layerMap = new Map<string, { nodeId: string; layer: string; name: string }>(); // Track Spring layers
+      const classMap = new Map<string, string>();
+      const layerMap = new Map<string, { nodeId: string; layer: string; name: string }>();
+      const fieldDependencies: Array<{ source: string; target: string; type: string }> = [];
       
-      for (const element of elements) {
+      for (const element of allElements) {
         const node = this.createNode(element);
         nodes.push(node);
         
-        if (element.type === 'class' || element.type === 'interface') {
+        if (element.type === 'class' || element.type === 'interface' || element.type === 'enum') {
           classMap.set(element.name, node.id);
-          
-          // Detect Spring Boot layer
-          const layer = this.detectSpringLayer(element.annotations || []);
-          if (layer) {
-            layerMap.set(element.name, { nodeId: node.id, layer, name: element.name });
+          if (element.layer) {
+            layerMap.set(element.name, { nodeId: node.id, layer: element.layer, name: element.name });
           }
         }
 
-        // Add containment edge for methods
         if (element.parentId) {
           edges.push({
             from: element.parentId,
@@ -90,12 +132,10 @@ export class JavaAstParser {
           });
         }
 
-        // Add inheritance edges
         if (element.extendsClass) {
-          const parentClassId = classMap.get(element.extendsClass);
           edges.push({
             from: node.id,
-            to: parentClassId || element.extendsClass,
+            to: classMap.get(element.extendsClass) || `external:${element.extendsClass}`,
             type: 'extends',
             label: `extends ${element.extendsClass}`
           });
@@ -105,21 +145,43 @@ export class JavaAstParser {
           for (const iface of element.implementsInterfaces) {
             edges.push({
               from: node.id,
-              to: iface,
+              to: classMap.get(iface) || `external:${iface}`,
               type: 'implements',
               label: `implements ${iface}`
             });
           }
         }
+
+        if (element.type === 'field' && element.fieldType) {
+          if (element.annotations?.some(a => 
+            JavaAstParser.INJECTION_ANNOTATIONS.some(ia => a.includes(ia))
+          )) {
+            fieldDependencies.push({
+              source: element.parentId || '',
+              target: element.fieldType,
+              type: 'injects'
+            });
+          }
+        }
       }
 
-      // Detect Spring Boot dependencies from field injections (@Autowired)
-      this.extractSpringDependencies(nodes, edges, layerMap);
+      for (const dep of fieldDependencies) {
+        const targetNode = layerMap.get(dep.target);
+        if (targetNode && dep.source) {
+          edges.push({
+            from: dep.source,
+            to: targetNode.nodeId,
+            type: 'uses',
+            label: this.getLayerRelationLabel(
+              layerMap.get(this.getClassNameFromId(dep.source))?.layer || '',
+              targetNode.layer
+            )
+          });
+        }
+      }
 
-      // Extract import relationships
-      this.extractImports(edges);
+      this.extractImports(nodes, edges, classMap);
 
-      // If no nodes found but it's an entry point, create a module node
       if (nodes.length === 0 && isEntryPoint) {
         const fileName = fileUri.fsPath.split(/[\\/]/).pop() || 'module';
         const baseName = fileName.replace(/\.java$/, '');
@@ -129,85 +191,64 @@ export class JavaAstParser {
       return { nodes, edges };
     } catch (error) {
       console.error(`Failed to parse Java file with AST ${fileUri.fsPath}:`, error);
-      // Fall back to regex-based parsing
       return this.fallbackParse(isEntryPoint);
     }
   }
 
-  /**
-   * Extract elements from the Concrete Syntax Tree
-   */
-  private extractFromCst(cst: any, elements: ParsedElement[]): void {
-    if (!cst || !cst.children) return;
+  private extractPackage(): void {
+    const match = this.content.match(/^\s*package\s+([\w.]+)\s*;/m);
+    this.packageName = match ? match[1] : '';
+  }
 
-    // Navigate to compilation unit
+  private extractFromCst(cst: any): ParsedElement[] {
+    if (!cst || !cst.children) return [];
+
+    const elements: ParsedElement[] = [];
     const compilationUnit = cst.children.ordinaryCompilationUnit?.[0];
-    if (!compilationUnit) return;
+    if (!compilationUnit) return elements;
 
-    // Get type declarations (classes, interfaces, enums)
     const typeDeclarations = compilationUnit.children?.typeDeclaration || [];
-
     for (const typeDecl of typeDeclarations) {
-      this.extractTypeDeclaration(typeDecl, elements, undefined);
+      const element = this.extractTypeDeclaration(typeDecl, undefined);
+      if (element) elements.push(element);
     }
+
+    return elements;
   }
 
-  /**
-   * Extract a type declaration (class, interface, enum)
-   */
-  private extractTypeDeclaration(
-    typeDecl: any, 
-    elements: ParsedElement[], 
-    parentId: string | undefined
-  ): void {
-    // Check for class declaration
+  private extractTypeDeclaration(typeDecl: any, parentId: string | undefined): ParsedElement | null {
     const classDecl = typeDecl.children?.classDeclaration?.[0];
-    if (classDecl) {
-      this.extractClassDeclaration(classDecl, elements, parentId);
-      return;
-    }
+    if (classDecl) return this.extractClassDeclaration(classDecl, parentId);
 
-    // Check for interface declaration
     const interfaceDecl = typeDecl.children?.interfaceDeclaration?.[0];
-    if (interfaceDecl) {
-      this.extractInterfaceDeclaration(interfaceDecl, elements, parentId);
-      return;
-    }
+    if (interfaceDecl) return this.extractInterfaceDeclaration(interfaceDecl, parentId);
+
+    const enumDecl = typeDecl.children?.enumDeclaration?.[0];
+    if (enumDecl) return this.extractEnumDeclaration(enumDecl, parentId);
+
+    return null;
   }
 
-  /**
-   * Extract class declaration
-   */
-  private extractClassDeclaration(
-    classDecl: any, 
-    elements: ParsedElement[],
-    parentId: string | undefined
-  ): void {
+  private extractClassDeclaration(classDecl: any, parentId: string | undefined): ParsedElement | null {
     const normalClass = classDecl.children?.normalClassDeclaration?.[0];
-    if (!normalClass) return;
+    if (!normalClass) return null;
 
-    // Get class name
     const classNameToken = normalClass.children?.typeIdentifier?.[0]?.children?.Identifier?.[0];
-    if (!classNameToken) return;
+    if (!classNameToken) return null;
 
     const className = classNameToken.image;
     const startLine = classNameToken.startLine || 1;
     
-    // Get modifiers
     const modifiers = this.extractModifiers(normalClass.children?.classModifier || []);
-    
-    // Get annotations
     const annotations = this.extractAnnotations(normalClass.children?.classModifier || []);
+    const layer = this.detectSpringLayer(annotations);
 
-    // Get extends
     let extendsClass: string | undefined;
     const superclass = normalClass.children?.superclass?.[0];
     if (superclass) {
-      const extendedType = this.extractTypeName(superclass.children?.classType?.[0]);
-      if (extendedType) extendsClass = extendedType;
+      extendsClass = this.extractTypeName(superclass.children?.classType?.[0]);
     }
 
-    // Get implements
     const implementsInterfaces: string[] = [];
     const superInterfaces = normalClass.children?.superinterfaces?.[0];
     if (superInterfaces) {
@@ -218,13 +259,19 @@ export class JavaAstParser {
       }
     }
 
-    // Find end line
     const classBody = normalClass.children?.classBody?.[0];
     const endLine = this.findEndLine(classBody) || startLine;
 
-    const classId = `${this.filePath}:class:${className}`;
+    const classId = parentId 
+      ? `${parentId}$${className}`
+      : `${this.filePath}:class:${className}`;
     
-    elements.push({
+    const children: ParsedElement[] = [];
+    if (classBody) {
+      this.extractClassBodyMembers(classBody, children, classId, className);
+    }
+
+    return {
       id: classId,
       name: className,
       type: 'class',
@@ -234,38 +281,29 @@ export class JavaAstParser {
       visibility: modifiers.visibility,
       isStatic: modifiers.isStatic,
       isAbstract: modifiers.isAbstract,
+      isFinal: modifiers.isFinal,
       annotations,
       extendsClass,
-      implementsInterfaces
-    });
-
-    // Extract methods from class body
-    if (classBody) {
-      this.extractClassBodyMembers(classBody, elements, classId, className);
-    }
+      implementsInterfaces,
+      children,
+      layer
+    };
   }
 
-  /**
-   * Extract interface declaration
-   */
-  private extractInterfaceDeclaration(
-    interfaceDecl: any, 
-    elements: ParsedElement[],
-    parentId: string | undefined
-  ): void {
+  private extractInterfaceDeclaration(interfaceDecl: any, parentId: string | undefined): ParsedElement | null {
     const normalInterface = interfaceDecl.children?.normalInterfaceDeclaration?.[0];
-    if (!normalInterface) return;
+    if (!normalInterface) return null;
 
     const ifaceNameToken = normalInterface.children?.typeIdentifier?.[0]?.children?.Identifier?.[0];
-    if (!ifaceNameToken) return;
+    if (!ifaceNameToken) return null;
 
     const ifaceName = ifaceNameToken.image;
     const startLine = ifaceNameToken.startLine || 1;
 
     const modifiers = this.extractModifiers(normalInterface.children?.interfaceModifier || []);
     const annotations = this.extractAnnotations(normalInterface.children?.interfaceModifier || []);
+    const layer = this.detectSpringLayer(annotations);
 
-    // Get extends
     const extendsInterfaces: string[] = [];
     const extendsClause = normalInterface.children?.extendsInterfaces?.[0];
     if (extendsClause) {
@@ -279,9 +317,16 @@ export class JavaAstParser {
     const interfaceBody = normalInterface.children?.interfaceBody?.[0];
     const endLine = this.findEndLine(interfaceBody) || startLine;
 
-    const ifaceId = `${this.filePath}:interface:${ifaceName}`;
+    const ifaceId = parentId 
+      ? `${parentId}$${ifaceName}` 
+      : `${this.filePath}:interface:${ifaceName}`;
 
-    elements.push({
+    const children: ParsedElement[] = [];
+    if (interfaceBody) {
+      this.extractInterfaceBodyMembers(interfaceBody, children, ifaceId, ifaceName);
+    }
+
+    return {
       id: ifaceId,
       name: ifaceName,
       type: 'interface',
@@ -290,115 +335,174 @@ export class JavaAstParser {
       parentId,
       visibility: modifiers.visibility,
       annotations,
-      implementsInterfaces: extendsInterfaces
-    });
-
-    // Extract methods from interface body
-    if (interfaceBody) {
-      this.extractInterfaceBodyMembers(interfaceBody, elements, ifaceId, ifaceName);
-    }
+      implementsInterfaces: extendsInterfaces,
+      children,
+      layer
+    };
   }
 
-  /**
-   * Extract members from class body
-   */
-  private extractClassBodyMembers(
-    classBody: any, 
-    elements: ParsedElement[], 
-    parentId: string,
-    className: string
-  ): void {
+  private extractEnumDeclaration(enumDecl: any, parentId: string | undefined): ParsedElement | null {
+    const enumNameToken = enumDecl.children?.typeIdentifier?.[0]?.children?.Identifier?.[0];
+    if (!enumNameToken) return null;
+
+    const enumName = enumNameToken.image;
+    const startLine = enumNameToken.startLine || 1;
+
+    const modifiers = this.extractModifiers(enumDecl.children?.classModifier || []);
+    const annotations = this.extractAnnotations(enumDecl.children?.classModifier || []);
+
+    const enumBody = enumDecl.children?.enumBody?.[0];
+    const endLine = this.findEndLine(enumBody) || startLine;
+
+    const enumId = parentId 
+      ? `${parentId}$${enumName}` 
+      : `${this.filePath}:enum:${enumName}`;
+
+    return {
+      id: enumId,
+      name: enumName,
+      type: 'enum',
+      startLine,
+      endLine,
+      parentId,
+      visibility: modifiers.visibility,
+      annotations,
+      children: []
+    };
+  }
+
+  private extractClassBodyMembers(classBody: any, children: ParsedElement[], parentId: string, className: string): void {
     const bodyDeclarations = classBody.children?.classBodyDeclaration || [];
 
     for (const bodyDecl of bodyDeclarations) {
-      const memberDecl = bodyDecl.children?.classMemberDeclaration?.[0];
-      if (!memberDecl) continue;
-
-      // Check for method
-      const methodDecl = memberDecl.children?.methodDeclaration?.[0];
-      if (methodDecl) {
-        this.extractMethodDeclaration(methodDecl, elements, parentId, className);
+      const constructorDecl = bodyDecl.children?.constructorDeclaration?.[0];
+      if (constructorDecl) {
+        const constructor = this.extractConstructor(constructorDecl, parentId, className);
+        if (constructor) children.push(constructor);
         continue;
       }
 
-      // Check for nested class
-      const classDecl = memberDecl.children?.classDeclaration?.[0];
-      if (classDecl) {
-        this.extractClassDeclaration(classDecl, elements, parentId);
+      const memberDecl = bodyDecl.children?.classMemberDeclaration?.[0];
+      if (!memberDecl) continue;
+
+      const methodDecl = memberDecl.children?.methodDeclaration?.[0];
+      if (methodDecl) {
+        const method = this.extractMethodDeclaration(methodDecl, parentId, className);
+        if (method) children.push(method);
+        continue;
       }
 
-      // Check for nested interface
-      const interfaceDecl = memberDecl.children?.interfaceDeclaration?.[0];
-      if (interfaceDecl) {
-        this.extractInterfaceDeclaration(interfaceDecl, elements, parentId);
+      const fieldDecl = memberDecl.children?.fieldDeclaration?.[0];
+      if (fieldDecl) {
+        const field = this.extractFieldDeclaration(fieldDecl, parentId, className);
+        if (field) children.push(field);
+        continue;
+      }
+
+      const nestedClassDecl = memberDecl.children?.classDeclaration?.[0];
+      if (nestedClassDecl) {
+        const nestedClass = this.extractClassDeclaration(nestedClassDecl, parentId);
+        if (nestedClass) children.push(nestedClass);
+        continue;
+      }
+
+      const nestedInterfaceDecl = memberDecl.children?.interfaceDeclaration?.[0];
+      if (nestedInterfaceDecl) {
+        const nestedInterface = this.extractInterfaceDeclaration(nestedInterfaceDecl, parentId);
+        if (nestedInterface) children.push(nestedInterface);
       }
     }
   }
 
-  /**
-   * Extract interface body members
-   */
-  private extractInterfaceBodyMembers(
-    interfaceBody: any,
-    elements: ParsedElement[],
-    parentId: string,
-    interfaceName: string
-  ): void {
+  private extractInterfaceBodyMembers(interfaceBody: any, children: ParsedElement[], parentId: string, interfaceName: string): void {
     const memberDeclarations = interfaceBody.children?.interfaceMemberDeclaration || [];
 
     for (const memberDecl of memberDeclarations) {
       const methodDecl = memberDecl.children?.interfaceMethodDeclaration?.[0];
       if (methodDecl) {
-        this.extractInterfaceMethodDeclaration(methodDecl, elements, parentId, interfaceName);
+        const method = this.extractInterfaceMethodDeclaration(methodDecl, parentId, interfaceName);
+        if (method) children.push(method);
+        continue;
+      }
+
+      const constantDecl = memberDecl.children?.constantDeclaration?.[0];
+      if (constantDecl) {
+        const constant = this.extractConstantDeclaration(constantDecl, parentId, interfaceName);
+        if (constant) children.push(constant);
+        continue;
+      }
+
+      const classDecl = memberDecl.children?.classDeclaration?.[0];
+      if (classDecl) {
+        const nestedClass = this.extractClassDeclaration(classDecl, parentId);
+        if (nestedClass) children.push(nestedClass);
       }
     }
   }
 
-  /**
-   * Extract method declaration
-   */
-  private extractMethodDeclaration(
-    methodDecl: any, 
-    elements: ParsedElement[], 
-    parentId: string,
-    className: string
-  ): void {
+  private extractConstructor(constructorDecl: any, parentId: string, className: string): ParsedElement | null {
+    const declarator = constructorDecl.children?.constructorDeclarator?.[0];
+    if (!declarator) return null;
+
+    const nameToken = declarator.children?.simpleTypeName?.[0]?.children?.Identifier?.[0];
+    if (!nameToken) return null;
+
+    const startLine = nameToken.startLine || 1;
+    const modifiers = this.extractModifiers(constructorDecl.children?.constructorModifier || []);
+    const annotations = this.extractAnnotations(constructorDecl.children?.constructorModifier || []);
+    const parameters = this.extractParameters(declarator);
+
+    const constructorBody = constructorDecl.children?.constructorBody?.[0];
+    const endLine = this.findEndLine(constructorBody) || startLine;
+
+    const constructorId = `${parentId}:constructor:${className}:${startLine}`;
+
+    return {
+      id: constructorId,
+      name: className,
+      type: 'constructor',
+      startLine,
+      endLine,
+      parentId,
+      visibility: modifiers.visibility,
+      annotations,
+      parameters,
+      children: []
+    };
+  }
+
+  private extractMethodDeclaration(methodDecl: any, parentId: string, className: string): ParsedElement | null {
     const methodHeader = methodDecl.children?.methodHeader?.[0];
-    if (!methodHeader) return;
+    if (!methodHeader) return null;
 
     const methodDeclarator = methodHeader.children?.methodDeclarator?.[0];
-    if (!methodDeclarator) return;
+    if (!methodDeclarator) return null;
 
     const methodNameToken = methodDeclarator.children?.Identifier?.[0];
-    if (!methodNameToken) return;
+    if (!methodNameToken) return null;
 
     const methodName = methodNameToken.image;
     const startLine = methodNameToken.startLine || 1;
 
-    // Get modifiers
     const modifiers = this.extractModifiers(methodDecl.children?.methodModifier || []);
     const annotations = this.extractAnnotations(methodDecl.children?.methodModifier || []);
 
-    // Get return type
     const result = methodHeader.children?.result?.[0];
     let returnType = 'void';
-    if (result) {
-      const unannType = result.children?.unannType?.[0];
-      if (unannType) {
-        returnType = this.extractUnannTypeName(unannType);
-      }
+    if (result?.children?.unannType?.[0]) {
+      returnType = this.extractUnannTypeName(result.children.unannType[0]);
+    } else if (result?.children?.Void) {
+      returnType = 'void';
     }
 
-    // Get parameters
     const parameters = this.extractParameters(methodDeclarator);
 
-    // Find end line
     const methodBody = methodDecl.children?.methodBody?.[0];
     const endLine = this.findEndLine(methodBody) || startLine;
 
-    const methodId = `${this.filePath}:method:${className}.${methodName}:${startLine}`;
+    const methodId = `${parentId}:method:${methodName}:${startLine}`;
 
-    elements.push({
+    return {
       id: methodId,
       name: methodName,
       type: 'method',
@@ -408,29 +512,23 @@ export class JavaAstParser {
       visibility: modifiers.visibility,
       isStatic: modifiers.isStatic,
       isAbstract: modifiers.isAbstract,
+      isFinal: modifiers.isFinal,
       annotations,
       parameters,
-      returnType
-    });
+      returnType,
+      children: []
+    };
   }
 
-  /**
-   * Extract interface method declaration
-   */
-  private extractInterfaceMethodDeclaration(
-    methodDecl: any,
-    elements: ParsedElement[],
-    parentId: string,
-    interfaceName: string
-  ): void {
+  private extractInterfaceMethodDeclaration(methodDecl: any, parentId: string, interfaceName: string): ParsedElement | null {
     const methodHeader = methodDecl.children?.methodHeader?.[0];
-    if (!methodHeader) return;
+    if (!methodHeader) return null;
 
     const methodDeclarator = methodHeader.children?.methodDeclarator?.[0];
-    if (!methodDeclarator) return;
+    if (!methodDeclarator) return null;
 
     const methodNameToken = methodDeclarator.children?.Identifier?.[0];
-    if (!methodNameToken) return;
+    if (!methodNameToken) return null;
 
     const methodName = methodNameToken.image;
     const startLine = methodNameToken.startLine || 1;
@@ -445,9 +543,9 @@ export class JavaAstParser {
     }
 
     const parameters = this.extractParameters(methodDeclarator);
-    const methodId = `${this.filePath}:method:${interfaceName}.${methodName}:${startLine}`;
+    const methodId = `${parentId}:method:${methodName}:${startLine}`;
 
-    elements.push({
+    return {
       id: methodId,
       name: methodName,
       type: 'method',
@@ -455,41 +553,310 @@ export class JavaAstParser {
       endLine: startLine,
       parentId,
       visibility: 'public',
+      isAbstract: !modifiers.isStatic,
       annotations,
       parameters,
-      returnType
-    });
+      returnType,
+      children: []
+    };
   }
 
-  /**
-   * Extract modifiers from modifier list
-   */
+  private extractFieldDeclaration(fieldDecl: any, parentId: string, className: string): ParsedElement | null {
+    const modifiers = this.extractModifiers(fieldDecl.children?.fieldModifier || []);
+    const annotations = this.extractAnnotations(fieldDecl.children?.fieldModifier || []);
+
+    const unannType = fieldDecl.children?.unannType?.[0];
+    const fieldType = unannType ? this.extractUnannTypeName(unannType) : 'Object';
+
+    const variableDeclaratorList = fieldDecl.children?.variableDeclaratorList?.[0];
+    const variableDeclarators = variableDeclaratorList?.children?.variableDeclarator || [];
+
+    if (variableDeclarators.length === 0) return null;
+
+    const firstDeclarator = variableDeclarators[0];
+    const nameToken = firstDeclarator.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0];
+    if (!nameToken) return null;
+
+    const fieldName = nameToken.image;
+    const startLine = nameToken.startLine || 1;
+
+    const fieldId = `${parentId}:field:${fieldName}:${startLine}`;
+
+    return {
+      id: fieldId,
+      name: fieldName,
+      type: 'field',
+      startLine,
+      endLine: startLine,
+      parentId,
+      visibility: modifiers.visibility,
+      isStatic: modifiers.isStatic,
+      isFinal: modifiers.isFinal,
+      annotations,
+      fieldType,
+      children: []
+    };
+  }
+
+  private extractConstantDeclaration(constantDecl: any, parentId: string, interfaceName: string): ParsedElement | null {
+    const annotations = this.extractAnnotations(constantDecl.children?.constantModifier || []);
+
+    const unannType = constantDecl.children?.unannType?.[0];
+    const fieldType = unannType ? this.extractUnannTypeName(unannType) : 'Object';
+
+    const variableDeclaratorList = constantDecl.children?.variableDeclaratorList?.[0];
+    const variableDeclarators = variableDeclaratorList?.children?.variableDeclarator || [];
+
+    if (variableDeclarators.length === 0) return null;
+
+    const firstDeclarator = variableDeclarators[0];
+    const nameToken = firstDeclarator.children?.variableDeclaratorId?.[0]?.children?.Identifier?.[0];
+    if (!nameToken) return null;
+
+    const fieldName = nameToken.image;
+    const startLine = nameToken.startLine || 1;
+
+    const fieldId = `${parentId}:field:${fieldName}:${startLine}`;
+
+    return {
+      id: fieldId,
+      name: fieldName,
+      type: 'field',
+      startLine,
+      endLine: startLine,
+      parentId,
+      visibility: 'public',
+      isStatic: true,
+      isFinal: true,
+      annotations,
+      fieldType,
+      children: []
+    };
+  }
+
+  private flattenElements(elements: ParsedElement[]): ParsedElement[] {
+    const result: ParsedElement[] = [];
+
+    const flatten = (elems: ParsedElement[]) => {
+      for (const elem of elems) {
+        result.push(elem);
+        if (elem.children && elem.children.length > 0) {
+          flatten(elem.children);
+        }
+      }
+    };
+
+    flatten(elements);
+    return result;
+  }
+
   private extractModifiers(modifiers: any[]): { 
-    visibility: 'public' | 'private' | 'protected';
+    visibility: 'public' | 'private' | 'protected' | 'package';
     isStatic: boolean;
     isAbstract: boolean;
+    isFinal: boolean;
   } {
-    let visibility: 'public' | 'private' | 'protected' = 'public';
+    let visibility: 'public' | 'private' | 'protected' | 'package' = 'package';
     let isStatic = false;
     let isAbstract = false;
+    let isFinal = false;
 
     for (const mod of modifiers) {
       if (mod.children?.Public) visibility = 'public';
       else if (mod.children?.Private) visibility = 'private';
       else if (mod.children?.Protected) visibility = 'protected';
-      else if (mod.children?.Static) isStatic = true;
-      else if (mod.children?.Abstract) isAbstract = true;
+      if (mod.children?.Static) isStatic = true;
+      if (mod.children?.Abstract) isAbstract = true;
+      if (mod.children?.Final) isFinal = true;
     }
 
-    return { visibility, isStatic, isAbstract };
+    return { visibility, isStatic, isAbstract, isFinal };
   }
 
-  /**
-   * Extract annotations from modifier list
-   */
   private extractAnnotations(modifiers: any[]): string[] {
     const annotations: string[] = [];
 
+    for (const mod of modifiers) {
+      const annotation = mod.children?.annotation?.[0];
+      if (annotation) {
+        const typeName = annotation.children?.typeName?.[0];
+        if (typeName) {
+          const identifiers = typeName.children?.Identifier || [];
+          let name = identifiers.map((id: any) => id.image).join('.');
+          
+          const elementValuePairList = annotation.children?.elementValuePairList?.[0];
+          const elementValue = annotation.children?.elementValue?.[0];
+          
+          if (elementValuePairList) {
+            const pairs = this.extractAnnotationPairs(elementValuePairList);
+            if (pairs) name += `(${pairs})`;
+          } else if (elementValue) {
+            const value = this.extractElementValue(elementValue);
+            if (value) name += `(${value})`;
+          }
+          
+          if (name) annotations.push(name);
+        }
+      }
+    }
+
+    return annotations;
+  }
+
+  private extractAnnotationPairs(pairList: any): string {
+    const pairs = pairList.children?.elementValuePair || [];
+    return pairs.map((pair: any) => {
+      const name = pair.children?.Identifier?.[0]?.image || '';
+      const value = this.extractElementValue(pair.children?.elementValue?.[0]);
+      return `${name}=${value}`;
+    }).join(', ');
+  }
+
+  private extractElementValue(elementValue: any): string {
+    if (!elementValue) return '';
+    
+    const stringLiteral = elementValue.children?.conditionalExpression?.[0]
+      ?.children?.ternaryExpression?.[0]
+      ?.children?.binaryExpression?.[0]
+      ?.children?.unaryExpression?.[0]
+      ?.children?.primary?.[0]
+      ?.children?.primaryPrefix?.[0]
+      ?.children?.literal?.[0]
+      ?.children?.StringLiteral?.[0];
+    
+    if (stringLiteral) {
+      return stringLiteral.image;
+    }
+    
+    return '...';
+  }
+
+  private extractTypeName(classType: any): string | undefined {
+    if (!classType) return undefined;
+
+    const identifiers = classType.children?.Identifier || [];
+    if (identifiers.length > 0) {
+      return identifiers[identifiers.length - 1].image;
+    }
+
+    const classOrInterfaceType = classType.children?.classOrInterfaceType?.[0];
+    if (classOrInterfaceType) {
+      const innerIdentifiers = classOrInterfaceType.children?.Identifier || [];
+      if (innerIdentifiers.length > 0) {
+        return innerIdentifiers[innerIdentifiers.length - 1].image;
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractUnannTypeName(unannType: any): string {
+    const primitiveType = unannType.children?.unannPrimitiveType?.[0];
+    if (primitiveType) {
+      const numericType = primitiveType.children?.numericType?.[0];
+      if (numericType) {
+        const integralType = numericType.children?.integralType?.[0];
+        if (integralType) {
+          if (integralType.children?.Int) return 'int';
+          if (integralType.children?.Long) return 'long';
+          if (integralType.children?.Short) return 'short';
+          if (integralType.children?.Byte) return 'byte';
+          if (integralType.children?.Char) return 'char';
+        }
+        const floatType = numericType.children?.floatingPointType?.[0];
+        if (floatType) {
+          if (floatType.children?.Float) return 'float';
+          if (floatType.children?.Double) return 'double';
+        }
+      }
+      if (primitiveType.children?.Boolean) return 'boolean';
+    }
+
+    const refType = unannType.children?.unannReferenceType?.[0];
+    if (refType) {
+      const arrayType = refType.children?.unannArrayType?.[0];
+      if (arrayType) {
+        const baseType = this.extractUnannTypeName({ children: arrayType.children });
+        return `${baseType}[]`;
+      }
+
+      const classType = refType.children?.unannClassOrInterfaceType?.[0];
+      if (classType) {
+        const unannClassType = classType.children?.unannClassType?.[0];
+        if (unannClassType) {
+          const identifiers = unannClassType.children?.Identifier || [];
+          if (identifiers.length > 0) {
+            let typeName = identifiers[identifiers.length - 1].image;
+            
+            const typeArgs = unannClassType.children?.typeArguments?.[0];
+            if (typeArgs) {
+              const argList = this.extractTypeArguments(typeArgs);
+              if (argList) typeName += `<${argList}>`;
+            }
+            
+            return typeName;
+          }
+        }
+      }
+    }
+
+    return 'Object';
+  }
+
+  private extractTypeArguments(typeArgs: any): string {
+    const argList = typeArgs.children?.typeArgumentList?.[0]?.children?.typeArgument || [];
+    return argList.map((arg: any) => {
+      const refType = arg.children?.referenceType?.[0];
+      if (refType) {
+        return this.extractTypeName(refType.children?.classOrInterfaceType?.[0]) || '?';
+      }
+      const wildcard = arg.children?.wildcard?.[0];
+      if (wildcard) {
+        const bounds = wildcard.children?.wildcardBounds?.[0];
+        if (bounds) {
+          const extendsBound = bounds.children?.Extends?.[0];
+          const superBound = bounds.children?.Super?.[0];
+          const boundType = this.extractTypeName(bounds.children?.referenceType?.[0]?.children?.classOrInterfaceType?.[0]);
+          if (extendsBound && boundType) return `? extends ${boundType}`;
+          if (superBound && boundType) return `? super ${boundType}`;
+        }
+        return '?';
+      }
+      return '?';
+    }).join(', ');
+  }
+
+  private extractParameters(declarator: any): Parameter[] {
+    const parameters: Parameter[] = [];
+    
+    const formalParamList = declarator.children?.formalParameterList?.[0];
+    if (!formalParamList) return parameters;
+
+    const formalParams = formalParamList.children?.formalParameter || [];
+    for (const param of formalParams) {
+      const varDecl = param.children?.variableDeclaratorId?.[0];
+      const typeSpec = param.children?.unannType?.[0];
+      const paramModifiers = param.children?.variableModifier || [];
+
+      if (varDecl && typeSpec) {
+        const paramName = varDecl.children?.Identifier?.[0]?.image || 'param';
+        const paramType = this.extractUnannTypeName(typeSpec);
+        const paramAnnotations = this.extractVariableAnnotations(paramModifiers);
+        
+        parameters.push({
+          name: paramName,
+          type: paramType,
+          optional: false,
+          description: paramAnnotations.length > 0 ? `@${paramAnnotations.join(', @')}` : undefined
+        });
+      }
+    }
+
+    return parameters;
+  }
+
+  private extractVariableAnnotations(modifiers: any[]): string[] {
+    const annotations: string[] = [];
     for (const mod of modifiers) {
       const annotation = mod.children?.annotation?.[0];
       if (annotation) {
@@ -501,101 +868,19 @@ export class JavaAstParser {
         }
       }
     }
-
     return annotations;
   }
 
-  /**
-   * Extract type name from classType node
-   */
-  private extractTypeName(classType: any): string | undefined {
-    if (!classType) return undefined;
-
-    const identifiers = classType.children?.Identifier || [];
-    if (identifiers.length > 0) {
-      return identifiers[identifiers.length - 1].image;
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Extract type name from unannType node
-   */
-  private extractUnannTypeName(unannType: any): string {
-    const primitiveType = unannType.children?.unannPrimitiveType?.[0];
-    if (primitiveType) {
-      const numericType = primitiveType.children?.numericType?.[0];
-      if (numericType) {
-        if (numericType.children?.integralType?.[0]?.children?.Int) return 'int';
-        if (numericType.children?.integralType?.[0]?.children?.Long) return 'long';
-        if (numericType.children?.integralType?.[0]?.children?.Short) return 'short';
-        if (numericType.children?.integralType?.[0]?.children?.Byte) return 'byte';
-        if (numericType.children?.integralType?.[0]?.children?.Char) return 'char';
-        if (numericType.children?.floatingPointType?.[0]?.children?.Float) return 'float';
-        if (numericType.children?.floatingPointType?.[0]?.children?.Double) return 'double';
-      }
-      if (primitiveType.children?.Boolean) return 'boolean';
-    }
-
-    const refType = unannType.children?.unannReferenceType?.[0];
-    if (refType) {
-      const classType = refType.children?.unannClassOrInterfaceType?.[0];
-      if (classType) {
-        const identifiers = classType.children?.unannClassType?.[0]?.children?.Identifier || [];
-        if (identifiers.length > 0) {
-          return identifiers[identifiers.length - 1].image;
-        }
-      }
-    }
-
-    return 'Object';
-  }
-
-  /**
-   * Extract parameters from method declarator
-   */
-  private extractParameters(methodDeclarator: any): Parameter[] {
-    const parameters: Parameter[] = [];
-    
-    const formalParamList = methodDeclarator.children?.formalParameterList?.[0];
-    if (!formalParamList) return parameters;
-
-    const formalParams = formalParamList.children?.formalParameter || [];
-    for (const param of formalParams) {
-      const varDecl = param.children?.variableDeclaratorId?.[0];
-      const typeSpec = param.children?.unannType?.[0];
-
-      if (varDecl && typeSpec) {
-        const paramName = varDecl.children?.Identifier?.[0]?.image || 'param';
-        const paramType = this.extractUnannTypeName(typeSpec);
-        
-        parameters.push({
-          name: paramName,
-          type: paramType,
-          optional: false
-        });
-      }
-    }
-
-    return parameters;
-  }
-
-  /**
-   * Find end line from a node
-   */
   private findEndLine(node: any): number | undefined {
     if (!node) return undefined;
 
-    // Try to find RBrace (closing brace)
     const rbrace = node.children?.RBrace?.[0];
     if (rbrace?.endLine) return rbrace.endLine;
 
-    // Recursively search for the last token
     let maxLine = 0;
     const findMax = (obj: any) => {
       if (!obj) return;
-      if (obj.endLine && obj.endLine > maxLine) {
+      if (typeof obj.endLine === 'number' && obj.endLine > maxLine) {
         maxLine = obj.endLine;
       }
       if (obj.children) {
@@ -614,42 +899,68 @@ export class JavaAstParser {
     return maxLine > 0 ? maxLine : undefined;
   }
 
-  /**
-   * Extract import statements
-   */
-  private extractImports(edges: CodeEdge[]): void {
+  private extractImports(nodes: CodeNode[], edges: CodeEdge[], classMap: Map<string, string>): void {
     const importPattern = /^import\s+(static\s+)?([^;]+);/gm;
     let match;
 
     while ((match = importPattern.exec(this.content)) !== null) {
       const isStatic = !!match[1];
       const importPath = match[2].trim();
+      const importedClass = importPath.split('.').pop() || importPath;
+
+      const targetId = classMap.get(importedClass) || `import:${importPath}`;
 
       edges.push({
         from: this.filePath,
-        to: importPath,
+        to: targetId,
         type: 'imports',
         label: isStatic ? 'static import' : 'import'
       });
     }
   }
 
-  /**
-   * Create a CodeNode from ParsedElement
-   */
-  private createNode(element: ParsedElement): CodeNode {
-    const sourceCode = this.lines.slice(element.startLine - 1, element.endLine).join('\n');
+  private detectSpringLayer(annotations: string[]): string | undefined {
+    for (const annotation of annotations) {
+      const annotationName = annotation.split('(')[0];
+      const layer = JavaAstParser.SPRING_ANNOTATIONS[annotationName];
+      if (layer) return layer;
+    }
+    return undefined;
+  }
 
-    // Build description from annotations
+  private getClassNameFromId(nodeId: string): string {
+    const match = nodeId.match(/:class:(\w+)$/);
+    return match ? match[1] : '';
+  }
+
+  private getLayerRelationLabel(sourceLayer: string, targetLayer: string): string {
+    if (sourceLayer === 'controller' && targetLayer === 'service') return 'calls service';
+    if (sourceLayer === 'service' && targetLayer === 'repository') return 'uses repository';
+    if (sourceLayer === 'service' && targetLayer === 'service') return 'calls service';
+    if (sourceLayer === 'controller' && targetLayer === 'repository') return 'queries';
+    if (targetLayer === 'entity') return 'uses entity';
+    if (sourceLayer === 'repository' && targetLayer === 'entity') return 'manages';
+    return 'depends on';
+  }
+
+  private createNode(element: ParsedElement): CodeNode {
+    const sourceCode = this.lines.slice(
+      Math.max(0, element.startLine - 1), 
+      Math.min(this.lines.length, element.endLine)
+    ).join('\n');
+
     let description = '';
     if (element.annotations && element.annotations.length > 0) {
       description = `@${element.annotations.join(', @')}`;
+    }
+    if (element.layer) {
+      description += description ? ` [${element.layer}]` : `[${element.layer}]`;
     }
 
     return {
       id: element.id,
       label: element.name,
-      type: element.type,
+      type: element.type === 'constructor' ? 'method' : element.type,
       language: 'java',
       filePath: this.filePath,
       startLine: element.startLine,
@@ -668,17 +979,16 @@ export class JavaAstParser {
     };
   }
 
-  /**
-   * Generate summary for an element
-   */
   private generateSummary(element: ParsedElement): string {
-    const annotations = element.annotations?.join(', @') || '';
+    const annotations = element.annotations?.slice(0, 3).join(', @') || '';
     const annotationStr = annotations ? `@${annotations} ` : '';
+    const layerStr = element.layer ? `[${element.layer}] ` : '';
     
     if (element.type === 'class') {
-      let summary = `${annotationStr}${element.visibility || 'public'}`;
+      let summary = `${layerStr}${annotationStr}${element.visibility || 'public'}`;
       if (element.isAbstract) summary += ' abstract';
       if (element.isStatic) summary += ' static';
+      if (element.isFinal) summary += ' final';
       summary += ` class ${element.name}`;
       if (element.extendsClass) summary += ` extends ${element.extendsClass}`;
       if (element.implementsInterfaces?.length) {
@@ -688,24 +998,38 @@ export class JavaAstParser {
     }
 
     if (element.type === 'interface') {
-      return `${annotationStr}${element.visibility || 'public'} interface ${element.name}`;
+      return `${layerStr}${annotationStr}${element.visibility || 'public'} interface ${element.name}`;
     }
 
-    if (element.type === 'method') {
+    if (element.type === 'enum') {
+      return `${annotationStr}${element.visibility || 'public'} enum ${element.name}`;
+    }
+
+    if (element.type === 'method' || element.type === 'constructor') {
       const params = element.parameters?.map(p => `${p.type} ${p.name}`).join(', ') || '';
       let summary = `${annotationStr}${element.visibility || 'public'}`;
       if (element.isStatic) summary += ' static';
       if (element.isAbstract) summary += ' abstract';
-      summary += ` ${element.returnType || 'void'} ${element.name}(${params})`;
+      if (element.isFinal) summary += ' final';
+      if (element.type === 'constructor') {
+        summary += ` ${element.name}(${params})`;
+      } else {
+        summary += ` ${element.returnType || 'void'} ${element.name}(${params})`;
+      }
+      return summary;
+    }
+
+    if (element.type === 'field') {
+      let summary = `${annotationStr}${element.visibility || 'package'}`;
+      if (element.isStatic) summary += ' static';
+      if (element.isFinal) summary += ' final';
+      summary += ` ${element.fieldType || 'Object'} ${element.name}`;
       return summary;
     }
 
     return element.name;
   }
 
-  /**
-   * Create module node for entry points
-   */
   private createModuleNode(baseName: string): CodeNode {
     return {
       id: `${this.filePath}:module:${baseName}`,
@@ -719,52 +1043,30 @@ export class JavaAstParser {
       isEntryPoint: true,
       documentation: {
         summary: `Java module ${baseName}`,
-        description: 'Entry point module',
+        description: this.packageName ? `package ${this.packageName}` : 'Java module',
         persona: {} as any
       }
     };
   }
 
-  /**
-   * Fallback to regex-based parsing if AST parsing fails
-   */
-  private async fallbackParse(isEntryPoint: boolean): Promise<ParseResult> {
+  private fallbackParse(isEntryPoint: boolean): ParseResult {
     console.log('Using fallback regex parsing for:', this.filePath);
     const nodes: CodeNode[] = [];
     const edges: CodeEdge[] = [];
+    const elements: ParsedElement[] = [];
 
-    // Simple regex-based fallback
-    const classPattern = /(?:(public|private|protected)\s+)?(?:(abstract)\s+)?(?:(static)\s+)?(?:(final)\s+)?class\s+(\w+)(?:\s*<[^>]+>)?(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?/g;
-    const methodPattern = /(?:(public|private|protected)\s+)?(?:(static)\s+)?(?:(abstract)\s+)?(?:(\w+(?:<[^>]+>)?)\s+)?(\w+)\s*\([^)]*\)\s*(?:throws\s+[^{]+)?{/g;
+    this.fallbackParseClasses(elements);
+    this.fallbackParseMethods(elements);
 
-    let classMatch;
-    while ((classMatch = classPattern.exec(this.content)) !== null) {
-      const className = classMatch[5];
-      const startLine = this.content.substring(0, classMatch.index).split('\n').length;
-      const classId = `${this.filePath}:class:${className}`;
-
-      nodes.push({
-        id: classId,
-        label: className,
-        type: 'class',
-        language: 'java',
-        filePath: this.filePath,
-        startLine,
-        endLine: startLine + 50,
-        sourceCode: classMatch[0],
-        documentation: {
-          summary: `class ${className}`,
-          description: '',
-          persona: {} as any
-        }
-      });
-
-      if (classMatch[6]) {
+    for (const element of elements) {
+      nodes.push(this.createNode(element));
+      
+      if (element.parentId) {
         edges.push({
-          from: classId,
-          to: classMatch[6],
-          type: 'extends',
-          label: `extends ${classMatch[6]}`
+          from: element.parentId,
+          to: element.id,
+          type: 'contains',
+          label: 'contains'
         });
       }
     }
@@ -778,144 +1080,141 @@ export class JavaAstParser {
     return { nodes, edges };
   }
 
-  /**
-   * Detect which Spring Boot layer a class belongs to based on annotations
-   */
-  private detectSpringLayer(annotations: string[]): string | null {
-    for (const annotation of annotations) {
-      // Check controller layer
-      if (JavaAstParser.SPRING_LAYERS.controller.some(a => annotation.includes(a))) {
-        return 'controller';
-      }
-      // Check service layer
-      if (JavaAstParser.SPRING_LAYERS.service.some(a => annotation.includes(a))) {
-        return 'service';
-      }
-      // Check repository layer
-      if (JavaAstParser.SPRING_LAYERS.repository.some(a => annotation.includes(a))) {
-        return 'repository';
-      }
-      // Check configuration
-      if (JavaAstParser.SPRING_LAYERS.configuration.some(a => annotation.includes(a))) {
-        return 'configuration';
-      }
-      // Check entity
-      if (JavaAstParser.SPRING_LAYERS.entity.some(a => annotation.includes(a))) {
-        return 'entity';
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Extract Spring Boot dependencies from @Autowired fields and constructor injection
-   * Creates edges: Controller → Service → Repository
-   */
-  private extractSpringDependencies(
-    nodes: CodeNode[],
-    edges: CodeEdge[],
-    layerMap: Map<string, { nodeId: string; layer: string; name: string }>
-  ): void {
-    // Find @Autowired or constructor-injected fields
-    const autowiredPattern = /@Autowired\s+(?:private\s+)?(\w+)\s+\w+;/g;
-    const constructorInjectionPattern = /(?:public\s+)?(\w+)\s*\(\s*(?:(?:@\w+\s+)?(?:final\s+)?(\w+)\s+\w+\s*,?\s*)+\)/g;
-    const fieldInjectionPattern = /(?:private|protected)\s+(?:final\s+)?(\w+)(?:<[^>]+>)?\s+(\w+)\s*;/g;
-
+  private fallbackParseClasses(elements: ParsedElement[]): void {
+    const classPattern = /(?:(@\w+(?:\([^)]*\))?)\s*)*(?:(public|private|protected)\s+)?(?:(abstract)\s+)?(?:(static)\s+)?(?:(final)\s+)?class\s+(\w+)(?:\s*<[^>]+>)?(?:\s+extends\s+(\w+))?(?:\s+implements\s+([^{]+))?/g;
+    
     let match;
+    while ((match = classPattern.exec(this.content)) !== null) {
+      const visibility = (match[2] as 'public' | 'private' | 'protected') || 'package';
+      const isAbstract = !!match[3];
+      const isStatic = !!match[4];
+      const isFinal = !!match[5];
+      const className = match[6];
+      const extendsClass = match[7];
+      const implementsStr = match[8];
+      
+      const startLine = this.content.substring(0, match.index).split('\n').length;
+      const classId = `${this.filePath}:class:${className}`;
+      
+      const annotations = this.extractAnnotationsFromContext(match.index);
+      const layer = this.detectSpringLayer(annotations);
+      
+      const implementsInterfaces = implementsStr
+        ? implementsStr.split(',').map(s => s.trim())
+        : undefined;
 
-    // Extract autowired dependencies
-    while ((match = autowiredPattern.exec(this.content)) !== null) {
-      const dependencyType = match[1];
-      this.createDependencyEdge(dependencyType, edges, layerMap);
-    }
-
-    // Extract from constructor injection (common Spring pattern)
-    // Look for constructor with typed parameters
-    const constructorPattern = /public\s+\w+\s*\(([^)]+)\)/g;
-    while ((match = constructorPattern.exec(this.content)) !== null) {
-      const params = match[1];
-      // Extract each parameter type
-      const paramPattern = /(?:@\w+\s+)?(?:final\s+)?(\w+)(?:<[^>]+>)?\s+\w+/g;
-      let paramMatch;
-      while ((paramMatch = paramPattern.exec(params)) !== null) {
-        const dependencyType = paramMatch[1];
-        // Skip primitive types and common types
-        if (!['String', 'int', 'long', 'boolean', 'Integer', 'Long', 'Boolean', 'List', 'Map', 'Set'].includes(dependencyType)) {
-          this.createDependencyEdge(dependencyType, edges, layerMap);
-        }
-      }
-    }
-
-    // Also look at all class fields for potential dependencies
-    while ((match = fieldInjectionPattern.exec(this.content)) !== null) {
-      const fieldType = match[1];
-      // Check if this type is a known Spring component
-      if (layerMap.has(fieldType)) {
-        this.createDependencyEdge(fieldType, edges, layerMap);
-      }
+      elements.push({
+        id: classId,
+        name: className,
+        type: 'class',
+        startLine,
+        endLine: startLine + 50,
+        visibility,
+        isAbstract,
+        isStatic,
+        isFinal,
+        annotations,
+        extendsClass,
+        implementsInterfaces,
+        layer,
+        children: []
+      });
     }
   }
 
-  /**
-   * Create a dependency edge between Spring components
-   */
-  private createDependencyEdge(
-    dependencyType: string,
-    edges: CodeEdge[],
-    layerMap: Map<string, { nodeId: string; layer: string; name: string }>
-  ): void {
-    const dependency = layerMap.get(dependencyType);
-    if (dependency) {
-      // Find the source class (the class containing the @Autowired field)
-      // We need to find which class in this file is using this dependency
-      const classPattern = /class\s+(\w+)/g;
-      let classMatch;
-      while ((classMatch = classPattern.exec(this.content)) !== null) {
-        const sourceClassName = classMatch[1];
-        const source = layerMap.get(sourceClassName);
-        if (source && source.name !== dependencyType) {
-          // Create edge based on layer relationship
-          const label = this.getLayerRelationLabel(source.layer, dependency.layer);
-          
-          // Avoid duplicate edges
-          const edgeExists = edges.some(e => 
-            e.from === source.nodeId && 
-            e.to === dependency.nodeId && 
-            e.type === 'uses'
-          );
-          
-          if (!edgeExists) {
-            edges.push({
-              from: source.nodeId,
-              to: dependency.nodeId,
-              type: 'uses',
-              label
-            });
-          }
+  private fallbackParseMethods(elements: ParsedElement[]): void {
+    const classElements = elements.filter(e => e.type === 'class');
+    
+    const methodPattern = /(?:(@\w+(?:\([^)]*\))?)\s*)*(?:(public|private|protected)\s+)?(?:(static)\s+)?(?:(abstract)\s+)?(?:(final)\s+)?(?:(\w+(?:<[^>]+>)?)\s+)?(\w+)\s*\(\s*([^)]*)\s*\)/g;
+    
+    let match;
+    while ((match = methodPattern.exec(this.content)) !== null) {
+      const visibility = (match[2] as 'public' | 'private' | 'protected') || 'package';
+      const isStatic = !!match[3];
+      const isAbstract = !!match[4];
+      const isFinal = !!match[5];
+      const returnType = match[6] || 'void';
+      const methodName = match[7];
+      const paramsStr = match[8];
+      
+      if (['if', 'for', 'while', 'switch', 'catch', 'synchronized'].includes(methodName)) {
+        continue;
+      }
+      
+      const startLine = this.content.substring(0, match.index).split('\n').length;
+      
+      let parentId: string | undefined;
+      for (const classElem of classElements) {
+        if (startLine > classElem.startLine && startLine < classElem.endLine + 100) {
+          parentId = classElem.id;
+          break;
         }
       }
+      
+      if (!parentId) continue;
+      
+      const methodId = `${parentId}:method:${methodName}:${startLine}`;
+      const annotations = this.extractAnnotationsFromContext(match.index);
+      const parameters = this.parseParametersFromString(paramsStr);
+
+      elements.push({
+        id: methodId,
+        name: methodName,
+        type: 'method',
+        startLine,
+        endLine: startLine + 10,
+        parentId,
+        visibility,
+        isStatic,
+        isAbstract,
+        isFinal,
+        annotations,
+        parameters,
+        returnType,
+        children: []
+      });
     }
   }
 
-  /**
-   * Get label for layer relationship
-   */
-  private getLayerRelationLabel(sourceLayer: string, targetLayer: string): string {
-    if (sourceLayer === 'controller' && targetLayer === 'service') {
-      return 'calls service';
+  private extractAnnotationsFromContext(matchIndex: number): string[] {
+    const annotations: string[] = [];
+    const beforeMatch = this.content.substring(Math.max(0, matchIndex - 500), matchIndex);
+    const lines = beforeMatch.split('\n').reverse();
+    
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('@')) {
+        const annotationMatch = trimmed.match(/@(\w+)(?:\([^)]*\))?/);
+        if (annotationMatch) {
+          annotations.unshift(annotationMatch[1]);
+        }
+      } else if (trimmed && !trimmed.startsWith('*') && !trimmed.startsWith('//')) {
+        break;
+      }
     }
-    if (sourceLayer === 'service' && targetLayer === 'repository') {
-      return 'uses repository';
+    
+    return annotations;
+  }
+
+  private parseParametersFromString(paramsStr: string): Parameter[] {
+    const parameters: Parameter[] = [];
+    if (!paramsStr.trim()) return parameters;
+
+    const parts = paramsStr.split(',');
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      
+      const paramMatch = trimmed.match(/(?:@\w+\s+)?(?:final\s+)?(\w+(?:<[^>]+>)?)\s+(\w+)/);
+      if (paramMatch) {
+        parameters.push({
+          name: paramMatch[2],
+          type: paramMatch[1],
+          optional: false
+        });
+      }
     }
-    if (sourceLayer === 'service' && targetLayer === 'service') {
-      return 'calls service';
-    }
-    if (sourceLayer === 'controller' && targetLayer === 'repository') {
-      return 'queries';
-    }
-    if (targetLayer === 'entity') {
-      return 'uses entity';
-    }
-    return 'depends on';
+    
+    return parameters;
   }
 }

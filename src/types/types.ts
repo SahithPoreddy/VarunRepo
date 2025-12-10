@@ -9,7 +9,7 @@ export type Persona = 'developer' | 'product-manager' | 'architect' | 'business-
 export interface CodeNode {
   id: string;
   label: string;
-  type: 'class' | 'function' | 'method' | 'component' | 'module' | 'interface' | 'decorator';
+  type: 'class' | 'function' | 'method' | 'component' | 'module' | 'interface' | 'decorator' | 'enum' | 'field';
   language: 'java' | 'typescript' | 'javascript' | 'python';
   filePath: string;
   startLine: number;
@@ -19,7 +19,7 @@ export interface CodeNode {
   parentId?: string; // ID of the parent node (e.g., class for method)
   
   // Metadata
-  visibility?: 'public' | 'private' | 'protected';
+  visibility?: 'public' | 'private' | 'protected' | 'package';
   isAsync?: boolean;
   isStatic?: boolean;
   isEntryPoint?: boolean;  // Mark if this is an entry point
@@ -43,6 +43,7 @@ export interface Parameter {
   type: string;
   optional?: boolean;
   defaultValue?: string;
+  description?: string;
 }
 
 export interface Documentation {
