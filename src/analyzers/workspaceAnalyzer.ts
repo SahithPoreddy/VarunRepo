@@ -20,6 +20,11 @@ export class WorkspaceAnalyzer {
   private entryPointDetector: EntryPointDetector;
   private importAnalyzer: ImportAnalyzer;
   private useAstParsers: boolean = true; // Use AST parsers by default
+  
+  // Prevent concurrent analysis
+  private isAnalyzing: boolean = false;
+  private lastAnalysisTime: number = 0;
+  private static readonly MIN_ANALYSIS_INTERVAL = 2000; // 2 seconds minimum between analyses
 
   constructor() {
     this.javaParser = new JavaParser();
@@ -33,6 +38,20 @@ export class WorkspaceAnalyzer {
   }
 
   async analyze(workspaceUri: vscode.Uri): Promise<AnalysisResult> {
+    // Guard against concurrent or rapid re-analysis
+    const now = Date.now();
+    if (this.isAnalyzing) {
+      console.log('Analysis already in progress, skipping...');
+      return this.createEmptyResult();
+    }
+    if (now - this.lastAnalysisTime < WorkspaceAnalyzer.MIN_ANALYSIS_INTERVAL) {
+      console.log('Analysis requested too soon, skipping...');
+      return this.createEmptyResult();
+    }
+    
+    this.isAnalyzing = true;
+    this.lastAnalysisTime = now;
+    
     const errors: AnalysisError[] = [];
     const warnings: string[] = [];
     const allNodes: CodeNode[] = [];
@@ -258,6 +277,7 @@ export class WorkspaceAnalyzer {
       
       console.log('Final analysis result:', finalResult);
 
+      this.isAnalyzing = false;
       return {
         graph,
         errors,
@@ -265,8 +285,27 @@ export class WorkspaceAnalyzer {
       };
 
     } catch (error) {
+      this.isAnalyzing = false;
       throw new Error(`Workspace analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private createEmptyResult(): AnalysisResult {
+    return {
+      graph: {
+        nodes: [],
+        edges: [],
+        metadata: { 
+          totalFiles: 0,
+          totalNodes: 0,
+          languages: [],
+          rootPath: '',
+          analyzedAt: new Date()
+        }
+      },
+      errors: [],
+      warnings: ['Skipped - analysis already in progress or too soon']
+    };
   }
 
   private collectDependencyTree(

@@ -1096,6 +1096,10 @@ const App = () => {
   
   // Track expanded nodes for collapsible tree
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  
+  // Prevent duplicate requests and re-renders
+  const isRequestingGraphRef = React.useRef(false);
+  const hasInitializedRef = React.useRef(false);
 
   // Build parent-children map for efficient lookup
   // Uses BOTH node.parentId AND edges with type 'contains' or 'calls'
@@ -1424,9 +1428,17 @@ const App = () => {
 
       switch (message.command) {
         case 'loadGraph':
+          // Guard against duplicate processing
+          if (isRequestingGraphRef.current) {
+            console.log('loadGraph ignored - already processing');
+            break;
+          }
+          isRequestingGraphRef.current = true;
           console.log('loadGraph received, nodes:', message.data?.nodes?.length);
           setGraphData(message.data);
           initializeGraph(message.data);
+          // Reset guard after a short delay
+          setTimeout(() => { isRequestingGraphRef.current = false; }, 500);
           break;
 
         case 'nodeDetails':
@@ -1483,12 +1495,10 @@ const App = () => {
           setCurrentBranch(message.branch);
           // Reset the graph hash so new graph data is recognized as different
           graphInitializedRef.current = null;
-          // Show loading state while fetching new graph
-          setLoading(true);
-          // Request updated graph data for new branch
-          vscode.postMessage({ command: 'getGraph' });
           // Also update last sync time to indicate fresh data
           setLastSyncTime(new Date().toLocaleTimeString());
+          // DON'T request getGraph here - the extension will send updated graph via loadGraph
+          // after the refresh command completes. Requesting here causes a loop.
           break;
 
         case 'error':
@@ -1500,13 +1510,16 @@ const App = () => {
 
     window.addEventListener('message', handleMessage);
     
-    // Request graph data, API key status, and pending changes
-    vscode.postMessage({ command: 'getGraph' });
-    vscode.postMessage({ command: 'checkApiKey' });
-    vscode.postMessage({ command: 'getPendingChanges' });
+    // Request initial data only once on mount
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      vscode.postMessage({ command: 'getGraph' });
+      vscode.postMessage({ command: 'checkApiKey' });
+      vscode.postMessage({ command: 'getPendingChanges' });
+    }
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [initializeGraph]);
+  }, []); // Remove initializeGraph from dependencies to prevent re-mounting
 
   // Listen for expand toggle events from CustomNode
   useEffect(() => {

@@ -689,22 +689,31 @@ export class VisualizationPanelReact {
   public async notifyBranchSwitch(branchName: string) {
     if (this._isDisposed || !this.panel) return;
     
-    // Notify webview that branch is switching
-    this.panel.webview.postMessage({
-      command: 'branchSwitch',
-      branch: branchName
-    });
-    
-    // Trigger a re-analysis for the new branch
-    // This ensures the graph data is fresh for the current branch
-    try {
-      console.log(`Branch switched to ${branchName}, triggering re-analysis...`);
-      // Execute the refresh command to get fresh analysis
-      await vscode.commands.executeCommand('codebase-visualizer.refreshVisualization');
-    } catch (error) {
-      console.error('Failed to refresh after branch switch:', error);
+    // Debounce to prevent multiple rapid switches
+    if (this.branchSwitchDebounce) {
+      clearTimeout(this.branchSwitchDebounce);
     }
+    
+    this.branchSwitchDebounce = setTimeout(async () => {
+      // Notify webview that branch is switching
+      this.panel?.webview.postMessage({
+        command: 'branchSwitch',
+        branch: branchName
+      });
+      
+      // Trigger a re-analysis for the new branch
+      // This ensures the graph data is fresh for the current branch
+      try {
+        console.log(`Branch switched to ${branchName}, triggering re-analysis...`);
+        // Execute the refresh command to get fresh analysis
+        await vscode.commands.executeCommand('codebase-visualizer.refreshVisualization');
+      } catch (error) {
+        console.error('Failed to refresh after branch switch:', error);
+      }
+    }, 300); // Debounce 300ms
   }
+  
+  private branchSwitchDebounce: NodeJS.Timeout | undefined;
 
   private getHtmlContent(): string {
     const scriptUri = this.panel!.webview.asWebviewUri(
