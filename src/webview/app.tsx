@@ -78,6 +78,13 @@ interface PopupData {
     docstring?: string;
     imports?: string[];
     exports?: string[];
+    // AI-generated fields
+    aiSummary?: string;
+    aiDescription?: string;
+    technicalDetails?: string;
+    patterns?: string[];
+    usageExamples?: string[];
+    keywords?: string[];
   };
 }
 
@@ -548,8 +555,14 @@ const NodePopup = ({
   const parameters = Array.isArray(metadata.parameters) ? metadata.parameters : [];
   const imports = Array.isArray(metadata.imports) ? metadata.imports : [];
   const exports = Array.isArray(metadata.exports) ? metadata.exports : [];
+  const patterns = Array.isArray(metadata.patterns) ? metadata.patterns : [];
+  const usageExamples = Array.isArray(metadata.usageExamples) ? metadata.usageExamples : [];
+  const keywords = Array.isArray(metadata.keywords) ? metadata.keywords : [];
   const returnType = safeString(metadata.returnType);
   const docstring = safeString(metadata.docstring);
+  const aiSummary = safeString(metadata.aiSummary);
+  const aiDescription = safeString(metadata.aiDescription);
+  const technicalDetails = safeString(metadata.technicalDetails);
 
   return (
     <div 
@@ -704,9 +717,72 @@ const NodePopup = ({
                   📝 DESCRIPTION
                 </div>
                 <p style={{ margin: 0, color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}>
-                  {data?.description || data?.content || docstring || 'No description available.'}
+                  {aiSummary || aiDescription || data?.description || data?.content || docstring || 'No description available.'}
                 </p>
               </div>
+
+              {/* AI Documentation - if available */}
+              {(aiDescription || technicalDetails) && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(100, 255, 218, 0.3)',
+                }}>
+                  <div style={{ 
+                    fontSize: '11px', 
+                    color: '#64ffda', 
+                    marginBottom: '10px', 
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <span>🤖</span> AI DOCUMENTATION
+                  </div>
+                  {aiDescription && (
+                    <p style={{ margin: '0 0 12px 0', color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}>
+                      {aiDescription}
+                    </p>
+                  )}
+                  {technicalDetails && (
+                    <pre style={{ 
+                      margin: 0, 
+                      color: '#94a3b8', 
+                      fontSize: '12px', 
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'inherit',
+                      background: 'rgba(0,0,0,0.2)',
+                      padding: '10px',
+                      borderRadius: '6px',
+                    }}>
+                      {technicalDetails}
+                    </pre>
+                  )}
+                </div>
+              )}
+
+              {/* Keywords / Tags */}
+              {keywords.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                }}>
+                  {keywords.map((keyword, i) => (
+                    <span key={i} style={{
+                      background: 'rgba(139, 92, 246, 0.2)',
+                      color: '#a78bfa',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                    }}>
+                      {safeString(keyword)}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Quick Info */}
               <div style={{
@@ -875,8 +951,63 @@ const NodePopup = ({
                 </div>
               )}
 
+              {/* Patterns / Design Patterns */}
+              {patterns.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
+                    🎯 PATTERNS DETECTED
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {patterns.map((pattern: any, i: number) => (
+                      <span key={i} style={{
+                        background: 'rgba(251, 191, 36, 0.1)',
+                        color: '#fbbf24',
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                      }}>
+                        {safeString(pattern)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Usage Examples */}
+              {usageExamples.length > 0 && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(100, 255, 218, 0.3)',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '10px', fontWeight: 600 }}>
+                    💡 USAGE EXAMPLES
+                  </div>
+                  {usageExamples.map((example: any, i: number) => (
+                    <pre key={i} style={{
+                      margin: i === 0 ? 0 : '8px 0 0 0',
+                      padding: '10px',
+                      background: 'rgba(0,0,0,0.3)',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '12px',
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'Monaco, Consolas, monospace',
+                    }}>
+                      {safeString(example)}
+                    </pre>
+                  ))}
+                </div>
+              )}
+
               {/* Empty State */}
-              {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && (
+              {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && patterns.length === 0 && usageExamples.length === 0 && (
                 <div style={{ 
                   textAlign: 'center', 
                   padding: '40px 20px',
@@ -1347,11 +1478,17 @@ const App = () => {
           break;
 
         case 'branchSwitch':
-          // Branch switch detected - may need to refresh graph
+          // Branch switch detected - need to refresh graph with new branch data
           console.log('Branch switched to:', message.branch);
           setCurrentBranch(message.branch);
+          // Reset the graph hash so new graph data is recognized as different
+          graphInitializedRef.current = null;
+          // Show loading state while fetching new graph
+          setLoading(true);
           // Request updated graph data for new branch
           vscode.postMessage({ command: 'getGraph' });
+          // Also update last sync time to indicate fresh data
+          setLastSyncTime(new Date().toLocaleTimeString());
           break;
 
         case 'error':
@@ -1613,7 +1750,21 @@ const App = () => {
               onClick={() => setStatsPanelOpen(!statsPanelOpen)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats Panel</span>
+                <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats</span>
+                {currentBranch && (
+                  <span style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '4px',
+                    background: 'rgba(167, 139, 250, 0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                  }}>
+                    <span>🌿</span>
+                    <span style={{ color: '#a78bfa', fontWeight: 600 }}>{currentBranch}</span>
+                  </span>
+                )}
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>
                   {stats.visible}/{stats.nodes} nodes
                 </span>
@@ -1787,34 +1938,24 @@ const App = () => {
           </div>
         </Panel>
 
-        {/* Sync Status Panel */}
-        {(lastSyncTime || currentBranch) && (
+        {/* Sync Status Indicator */}
+        {lastSyncTime && (
           <Panel position="top-right">
             <div style={{
               background: 'rgba(30, 41, 59, 0.95)',
               backdropFilter: 'blur(10px)',
               borderRadius: '8px',
-              padding: '8px 12px',
+              padding: '6px 10px',
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
               border: '1px solid rgba(100, 255, 218, 0.2)',
               color: '#94a3b8',
               fontSize: '11px',
               display: 'flex',
-              flexDirection: 'column' as const,
-              gap: '4px',
+              alignItems: 'center',
+              gap: '6px',
             }}>
-              {currentBranch && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px' }}>🌿</span>
-                  <span style={{ color: '#a78bfa', fontWeight: 600 }}>{currentBranch}</span>
-                </div>
-              )}
-              {lastSyncTime && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ color: '#10b981' }}>●</span>
-                  Last synced: {lastSyncTime}
-                </div>
-              )}
+              <span style={{ color: '#10b981' }}>●</span>
+              Synced: {lastSyncTime}
             </div>
           </Panel>
         )}

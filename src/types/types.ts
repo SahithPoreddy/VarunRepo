@@ -15,6 +15,9 @@ export interface CodeNode {
   startLine: number;
   endLine: number;
   
+  // Hierarchy
+  parentId?: string; // ID of the parent node (e.g., class for method)
+  
   // Metadata
   visibility?: 'public' | 'private' | 'protected';
   isAsync?: boolean;

@@ -188,16 +188,43 @@ export class VisualizationPanelReact {
       }
 
       // Generate documentation
-      await docGenerator.generateCodebaseDocs(
+      const documentation = await docGenerator.generateCodebaseDocs(
         this.currentAnalysis,
         workspaceFolders[0].uri,
         true // Use AI
       );
 
-      // Notify webview that generation completed
-      this.panel?.webview.postMessage({ command: 'docsGenerationComplete' });
+      // Notify webview that generation completed with docs data
+      this.panel?.webview.postMessage({ 
+        command: 'docsGenerationComplete',
+        docsCount: documentation.components.length,
+        usedAI: documentation.generatedWithLLM || documentation.generatedWithAgent
+      });
       
-      vscode.window.showInformationMessage('✅ AI Documentation generated successfully! Check the .doc_sync folder.');
+      // Open the generated README.md for user to view
+      const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs');
+      const readmePath = path.join(docsFolder, 'README.md');
+      
+      try {
+        // Check if README exists and open it
+        const readmeUri = vscode.Uri.file(readmePath);
+        const doc = await vscode.workspace.openTextDocument(readmeUri);
+        await vscode.window.showTextDocument(doc, { 
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: true 
+        });
+        
+        vscode.window.showInformationMessage(
+          `✅ AI Documentation generated for ${documentation.components.length} components! Opened README.md`
+        );
+      } catch (openError) {
+        // If README doesn't exist, show the .doc_sync folder
+        const docsFolderUri = vscode.Uri.file(docsFolder);
+        vscode.commands.executeCommand('revealInExplorer', docsFolderUri);
+        vscode.window.showInformationMessage(
+          `✅ AI Documentation generated for ${documentation.components.length} components! Check .doc_sync folder.`
+        );
+      }
 
     } catch (error) {
       console.error('Failed to generate documentation:', error);
@@ -437,7 +464,7 @@ export class VisualizationPanelReact {
       };
     }
 
-    // Send node details to webview with parent and hierarchy info
+    // Send node details to webview with parent and hierarchy info and AI docs
     this.panel?.webview.postMessage({
       command: 'nodeDetails',
       content: popupData.summary || popupData.details,
@@ -447,9 +474,15 @@ export class VisualizationPanelReact {
         lineEnd: node.endLine,
         parameters: node.parameters,
         returnType: node.returnType,
-        docstring: node.documentation || popupData.summary,
+        docstring: popupData.summary || node.documentation?.summary,
+        aiSummary: popupData.aiSummary || popupData.summary,
+        aiDescription: popupData.description,
+        technicalDetails: popupData.technicalDetails || popupData.details,
         imports: popupData.dependencies,
         exports: popupData.dependents,
+        patterns: popupData.patterns,
+        usageExamples: popupData.usageExamples,
+        keywords: popupData.keywords,
       },
       parentId: parentId,
       parentLabel: parentNode?.label,
@@ -625,15 +658,26 @@ export class VisualizationPanelReact {
   }
 
   /**
-   * Notify the webview about a branch switch
+   * Notify the webview about a branch switch and trigger re-analysis
    */
-  public notifyBranchSwitch(branchName: string) {
+  public async notifyBranchSwitch(branchName: string) {
     if (this._isDisposed || !this.panel) return;
     
+    // Notify webview that branch is switching
     this.panel.webview.postMessage({
       command: 'branchSwitch',
       branch: branchName
     });
+    
+    // Trigger a re-analysis for the new branch
+    // This ensures the graph data is fresh for the current branch
+    try {
+      console.log(`Branch switched to ${branchName}, triggering re-analysis...`);
+      // Execute the refresh command to get fresh analysis
+      await vscode.commands.executeCommand('codebase-visualizer.refreshVisualization');
+    } catch (error) {
+      console.error('Failed to refresh after branch switch:', error);
+    }
   }
 
   private getHtmlContent(): string {

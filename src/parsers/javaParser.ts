@@ -59,31 +59,43 @@ export class JavaParser {
       // Parse classes
       const classes = this.parseClasses(lines);
       
+      // Build a map of class names to their node IDs for inheritance lookup
+      const classNameToIdMap = new Map<string, string>();
+      
       for (const cls of classes) {
         const classNode = this.createClassNode(cls, fileUri, lines);
         nodes.push(classNode);
+        classNameToIdMap.set(cls.name, classNode.id);
         
         // Parse methods within this class
         const methods = this.parseMethods(lines, cls.startLine, cls.endLine, cls.name);
         
         for (const method of methods) {
-          const methodNode = this.createMethodNode(method, fileUri, lines);
+          // Pass the parent class node ID to set proper parentId
+          const methodNode = this.createMethodNode(method, fileUri, lines, classNode.id);
           nodes.push(methodNode);
           
-          // Add contains edge
+          // Add contains edge with proper node IDs
           edges.push({
-            from: fileUri.fsPath,
-            to: fileUri.fsPath,
+            from: classNode.id,
+            to: methodNode.id,
             type: 'contains',
-            label: `${cls.name} contains ${method.name}`
+            label: `contains`
           });
         }
+      }
+      
+      // Add inheritance edges after all classes are parsed (so we can resolve class names to IDs)
+      for (const cls of classes) {
+        const classId = classNameToIdMap.get(cls.name);
+        if (!classId) continue;
         
-        // Add inheritance edges
         if (cls.extendsClass) {
+          // Try to find the parent class node ID if it exists in this file
+          const parentClassId = classNameToIdMap.get(cls.extendsClass);
           edges.push({
-            from: fileUri.fsPath,
-            to: cls.extendsClass,
+            from: classId,
+            to: parentClassId || cls.extendsClass, // Use ID if found, otherwise use class name
             type: 'extends',
             label: `extends ${cls.extendsClass}`
           });
@@ -91,7 +103,7 @@ export class JavaParser {
         
         for (const iface of cls.implementsInterfaces) {
           edges.push({
-            from: fileUri.fsPath,
+            from: classId,
             to: iface,
             type: 'implements',
             label: `implements ${iface}`
@@ -485,7 +497,7 @@ export class JavaParser {
   /**
    * Create a CodeNode for a method
    */
-  private createMethodNode(method: JavaMethod, fileUri: vscode.Uri, lines: string[]): CodeNode {
+  private createMethodNode(method: JavaMethod, fileUri: vscode.Uri, lines: string[], parentClassId: string): CodeNode {
     const sourceCode = lines.slice(method.startLine, method.endLine + 1).join('\n');
     
     return {
@@ -502,6 +514,7 @@ export class JavaParser {
       parameters: method.parameters,
       returnType: method.returnType,
       sourceCode: sourceCode,
+      parentId: parentClassId, // Link method to its parent class
       documentation: {
         summary: `${method.isAbstract ? 'Abstract ' : ''}${method.isStatic ? 'Static ' : ''}method ${method.name}`,
         description: method.annotations.length > 0 ? `Annotations: @${method.annotations.join(', @')}` : '',
