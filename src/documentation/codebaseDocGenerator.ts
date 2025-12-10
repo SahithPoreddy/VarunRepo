@@ -614,6 +614,7 @@ export class CodebaseDocGenerator {
 
   /**
    * Analyze the overall architecture of the codebase
+   * Generates comprehensive project overview with detailed insights
    */
   private analyzeArchitecture(nodes: CodeNode[], edges: CodeEdge[]): {
     overview: string;
@@ -623,19 +624,38 @@ export class CodebaseDocGenerator {
     // Categorize files by directory/type
     const directories = new Map<string, number>();
     const types = new Map<string, number>();
+    const languages = new Map<string, number>();
+    const entryPointNodes = nodes.filter(n => n.isEntryPoint);
+    const primaryEntry = nodes.find(n => n.isPrimaryEntry);
 
     nodes.forEach(node => {
       const dir = path.dirname(node.filePath);
       const relDir = path.relative(this.workspaceRoot, dir).split(path.sep)[0] || 'root';
       directories.set(relDir, (directories.get(relDir) || 0) + 1);
       types.set(node.type, (types.get(node.type) || 0) + 1);
+      languages.set(node.language, (languages.get(node.language) || 0) + 1);
     });
 
-    // Detect layers
+    // Detect layers with descriptions
     const layers: string[] = [];
     const dirEntries = Array.from(directories.entries()).sort((a, b) => b[1] - a[1]);
     dirEntries.forEach(([dir, count]) => {
-      layers.push(`${dir}: ${count} components`);
+      // Add contextual description based on common folder names
+      let description = '';
+      const dirLower = dir.toLowerCase();
+      if (dirLower.includes('component')) description = ' (UI Components)';
+      else if (dirLower.includes('service')) description = ' (Business Logic)';
+      else if (dirLower.includes('controller')) description = ' (API Controllers)';
+      else if (dirLower.includes('model') || dirLower.includes('entity')) description = ' (Data Models)';
+      else if (dirLower.includes('util') || dirLower.includes('helper')) description = ' (Utilities)';
+      else if (dirLower.includes('hook')) description = ' (React Hooks)';
+      else if (dirLower.includes('context')) description = ' (React Context)';
+      else if (dirLower.includes('api') || dirLower.includes('client')) description = ' (API Layer)';
+      else if (dirLower.includes('test')) description = ' (Tests)';
+      else if (dirLower.includes('config')) description = ' (Configuration)';
+      else if (dirLower.includes('repository') || dirLower.includes('dao')) description = ' (Data Access)';
+      else if (dirLower.includes('dto')) description = ' (Data Transfer Objects)';
+      layers.push(`📁 **${dir}**${description}: ${count} component${count > 1 ? 's' : ''}`);
     });
 
     // Detect overall patterns
@@ -644,18 +664,107 @@ export class CodebaseDocGenerator {
       this.detectPatterns(node.sourceCode).forEach(p => allPatterns.add(p));
     });
 
-    // Generate overview
+    // Generate comprehensive overview
     const typeBreakdown = Array.from(types.entries())
-      .map(([t, c]) => `${c} ${t}s`)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, c]) => `**${c}** ${t}${c > 1 ? 's' : ''}`)
       .join(', ');
 
-    const overview = `This codebase contains ${nodes.length} components (${typeBreakdown}) organized across ${directories.size} directories. ` +
-      `It has ${edges.length} import relationships between components.`;
+    const languageBreakdown = Array.from(languages.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([l, c]) => `${l} (${c})`)
+      .join(', ');
+
+    const patternsList = Array.from(allPatterns).slice(0, 10);
+
+    // Build detailed overview with markdown formatting
+    let overview = `## 📊 Project Summary\n\n`;
+    overview += `This codebase contains **${nodes.length} components** organized across **${directories.size} directories**.\n\n`;
+    
+    overview += `### Component Breakdown\n`;
+    overview += `${typeBreakdown}\n\n`;
+    
+    overview += `### Languages Used\n`;
+    overview += `${languageBreakdown}\n\n`;
+    
+    overview += `### Dependency Graph\n`;
+    overview += `- **${edges.length}** import/dependency relationships\n`;
+    overview += `- Average dependencies per component: **${nodes.length > 0 ? (edges.length / nodes.length).toFixed(1) : 0}**\n\n`;
+    
+    if (primaryEntry) {
+      overview += `### Entry Point\n`;
+      overview += `The main entry point is \`${primaryEntry.label}\` located at \`${path.relative(this.workspaceRoot, primaryEntry.filePath)}\`.\n\n`;
+    }
+    
+    if (entryPointNodes.length > 1) {
+      overview += `### Additional Entry Points\n`;
+      entryPointNodes.filter(n => !n.isPrimaryEntry).slice(0, 5).forEach(ep => {
+        overview += `- \`${ep.label}\` - ${path.relative(this.workspaceRoot, ep.filePath)}\n`;
+      });
+      overview += '\n';
+    }
+
+    // Architecture insights
+    overview += `## 🏗️ Architecture Insights\n\n`;
+    
+    // Detect architecture style
+    const hasControllers = nodes.some(n => n.label.includes('Controller') || n.sourceCode?.includes('@Controller') || n.sourceCode?.includes('@RestController'));
+    const hasServices = nodes.some(n => n.label.includes('Service') || n.sourceCode?.includes('@Service'));
+    const hasRepositories = nodes.some(n => n.label.includes('Repository') || n.sourceCode?.includes('@Repository'));
+    const hasComponents = nodes.some(n => n.type === 'component' || n.sourceCode?.includes('React.'));
+    const hasHooks = nodes.some(n => n.sourceCode?.includes('useState') || n.sourceCode?.includes('useEffect'));
+    
+    if (hasControllers && hasServices && hasRepositories) {
+      overview += `### Layered Architecture (Spring Boot)\n`;
+      overview += `This project follows a **layered architecture** pattern typical of Spring Boot applications:\n\n`;
+      overview += `1. **Controller Layer** - Handles HTTP requests and responses\n`;
+      overview += `2. **Service Layer** - Contains business logic\n`;
+      overview += `3. **Repository Layer** - Manages data persistence\n\n`;
+    } else if (hasComponents && hasHooks) {
+      overview += `### React Component Architecture\n`;
+      overview += `This project uses **React** with a component-based architecture:\n\n`;
+      overview += `- **Functional Components** with React Hooks\n`;
+      if (allPatterns.has('State Management (useState)')) {
+        overview += `- **Local State Management** using useState\n`;
+      }
+      if (allPatterns.has('Side Effects (useEffect)')) {
+        overview += `- **Side Effects** handled with useEffect\n`;
+      }
+      if (allPatterns.has('Context Provider')) {
+        overview += `- **Global State** via React Context\n`;
+      }
+      overview += '\n';
+    }
+
+    // Key patterns section
+    if (patternsList.length > 0) {
+      overview += `### Design Patterns Detected\n`;
+      patternsList.forEach(p => {
+        overview += `- ✅ ${p}\n`;
+      });
+      overview += '\n';
+    }
+
+    // Code quality insights
+    const avgLinesPerComponent = nodes.length > 0 
+      ? Math.round(nodes.reduce((sum, n) => sum + (n.endLine - n.startLine), 0) / nodes.length)
+      : 0;
+    
+    overview += `### Code Metrics\n`;
+    overview += `- Average component size: **~${avgLinesPerComponent} lines**\n`;
+    overview += `- Total directories: **${directories.size}**\n`;
+    overview += `- Component types: **${types.size}** different types\n\n`;
+
+    // Recommendations
+    overview += `## 💡 Quick Navigation Tips\n\n`;
+    overview += `1. Click on any component in the **Components** tab to see detailed documentation\n`;
+    overview += `2. Use the **View in Graph** button to navigate to a component's position\n`;
+    overview += `3. The graph shows parent-child relationships - expand nodes to see children\n`;
 
     return {
       overview,
-      layers: layers.slice(0, 10),
-      patterns: Array.from(allPatterns).slice(0, 15)
+      layers: layers.slice(0, 15),
+      patterns: Array.from(allPatterns).slice(0, 20)
     };
   }
 
