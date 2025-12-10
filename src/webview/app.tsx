@@ -17,6 +17,95 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
 import { createRoot } from 'react-dom/client';
+import { marked } from 'marked';
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+});
+
+// Markdown CSS styles to inject
+const markdownStyles = `
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #e2e8f0;
+}
+.markdown-content h1, .markdown-content h2, .markdown-content h3, 
+.markdown-content h4, .markdown-content h5, .markdown-content h6 {
+  color: #64ffda;
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+.markdown-content h1 { font-size: 1.4em; }
+.markdown-content h2 { font-size: 1.25em; }
+.markdown-content h3 { font-size: 1.1em; }
+.markdown-content p {
+  margin: 8px 0;
+}
+.markdown-content code {
+  background: rgba(100, 255, 218, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9em;
+  color: #64ffda;
+}
+.markdown-content pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 10px 0;
+  border: 1px solid rgba(100, 255, 218, 0.1);
+}
+.markdown-content pre code {
+  background: transparent;
+  padding: 0;
+  color: #cbd5e1;
+}
+.markdown-content ul, .markdown-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+.markdown-content li {
+  margin: 4px 0;
+}
+.markdown-content blockquote {
+  border-left: 3px solid #64ffda;
+  margin: 10px 0;
+  padding-left: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+.markdown-content a {
+  color: #64ffda;
+  text-decoration: none;
+}
+.markdown-content a:hover {
+  text-decoration: underline;
+}
+.markdown-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 10px 0;
+}
+.markdown-content th, .markdown-content td {
+  border: 1px solid #334155;
+  padding: 8px 12px;
+  text-align: left;
+}
+.markdown-content th {
+  background: rgba(100, 255, 218, 0.1);
+  color: #64ffda;
+}
+.markdown-content hr {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 16px 0;
+}
+`;
 
 // Declare VS Code API type
 declare const acquireVsCodeApi: () => {
@@ -551,6 +640,16 @@ const NodePopup = ({
     }
   };
 
+  // Render markdown content safely
+  const renderMarkdown = (content: string): string => {
+    if (!content) return '';
+    try {
+      return marked(content) as string;
+    } catch {
+      return content;
+    }
+  };
+
   // Get arrays safely
   const parameters = Array.isArray(metadata.parameters) ? metadata.parameters : [];
   const imports = Array.isArray(metadata.imports) ? metadata.imports : [];
@@ -716,49 +815,104 @@ const NodePopup = ({
                 <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
                   📝 DESCRIPTION
                 </div>
-                <p style={{ margin: 0, color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}>
-                  {aiSummary || aiDescription || data?.description || data?.content || docstring || 'No description available.'}
-                </p>
+                <div 
+                  style={{ margin: 0, color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}
+                  className="markdown-content"
+                  dangerouslySetInnerHTML={{ 
+                    __html: renderMarkdown(aiSummary || aiDescription || data?.description || data?.content || docstring || 'No description available.')
+                  }}
+                />
               </div>
 
               {/* AI Documentation - if available */}
               {(aiDescription || technicalDetails) && (
                 <div style={{
                   background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
+                  padding: '16px',
+                  borderRadius: '12px',
                   border: '1px solid rgba(100, 255, 218, 0.3)',
                 }}>
                   <div style={{ 
-                    fontSize: '11px', 
+                    fontSize: '12px', 
                     color: '#64ffda', 
-                    marginBottom: '10px', 
+                    marginBottom: '12px', 
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '8px',
+                    borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
+                    paddingBottom: '8px'
                   }}>
                     <span>🤖</span> AI DOCUMENTATION
                   </div>
                   {aiDescription && (
-                    <p style={{ margin: '0 0 12px 0', color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}>
-                      {aiDescription}
-                    </p>
+                    <div 
+                      style={{ 
+                        margin: '0 0 12px 0', 
+                        color: '#e2e8f0', 
+                        fontSize: '14px', 
+                        lineHeight: 1.7 
+                      }}
+                      className="markdown-content"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(aiDescription) }}
+                    />
                   )}
                   {technicalDetails && (
-                    <pre style={{ 
-                      margin: 0, 
-                      color: '#94a3b8', 
-                      fontSize: '12px', 
-                      whiteSpace: 'pre-wrap',
-                      fontFamily: 'inherit',
-                      background: 'rgba(0,0,0,0.2)',
-                      padding: '10px',
-                      borderRadius: '6px',
+                    <div style={{
+                      background: 'rgba(0,0,0,0.3)',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      marginTop: '8px',
+                      border: '1px solid rgba(100, 255, 218, 0.1)',
                     }}>
-                      {technicalDetails}
-                    </pre>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#94a3b8', 
+                        marginBottom: '8px',
+                        fontWeight: 600 
+                      }}>
+                        📋 Technical Details
+                      </div>
+                      <div 
+                        style={{ 
+                          color: '#cbd5e1', 
+                          fontSize: '13px', 
+                          lineHeight: 1.6
+                        }}
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(technicalDetails) }}
+                      />
+                    </div>
                   )}
+                </div>
+              )}
+
+              {/* Usage Examples */}
+              {usageExamples.length > 0 && (
+                <div style={{
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '8px', fontWeight: 600 }}>
+                    💡 USAGE EXAMPLES
+                  </div>
+                  {usageExamples.map((example, i) => (
+                    <div 
+                      key={i}
+                      style={{ 
+                        background: 'rgba(0,0,0,0.2)',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        marginBottom: i < usageExamples.length - 1 ? '8px' : 0,
+                        fontSize: '13px',
+                        color: '#e2e8f0',
+                        fontFamily: 'monospace'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(safeString(example)) }}
+                    />
+                  ))}
                 </div>
               )}
 
@@ -1699,6 +1853,9 @@ const App = () => {
 
   return (
     <div style={styles.container}>
+      {/* Inject markdown styles */}
+      <style>{markdownStyles}</style>
+      
       {/* SVG Definitions for gradients */}
       <svg style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>

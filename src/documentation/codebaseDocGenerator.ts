@@ -98,12 +98,69 @@ export class CodebaseDocGenerator {
   }
 
   /**
+   * Load existing documentation and filter out nodes that don't need regeneration
+   * Returns nodes that need processing and cached docs that can be reused
+   */
+  private async loadExistingDocsAndFilter(nodes: CodeNode[]): Promise<{
+    nodesToProcess: CodeNode[];
+    existingDocs: Map<string, ComponentDoc>;
+  }> {
+    const existingDocs = new Map<string, ComponentDoc>();
+    const nodesToProcess: CodeNode[] = [];
+
+    for (const node of nodes) {
+      const nodeId = this.sanitizeFileName(node.id);
+      const nodePath = path.join(this.nodesFolder, `${nodeId}.json`);
+
+      try {
+        if (fs.existsSync(nodePath)) {
+          const content = fs.readFileSync(nodePath, 'utf8');
+          const cachedDoc = JSON.parse(content) as ComponentDoc;
+          
+          // Check if the cached doc has AI content (if we're using AI)
+          // or if it matches the current node's source code hash
+          const hasAIContent = cachedDoc.aiSummary || cachedDoc.description;
+          const sourceCodeHash = this.hashString(node.sourceCode || '');
+          const cachedHash = cachedDoc.sourceCode ? this.hashString(cachedDoc.sourceCode) : '';
+          
+          // Reuse if has AI content and source hasn't changed significantly
+          if (hasAIContent && sourceCodeHash === cachedHash) {
+            existingDocs.set(node.id, cachedDoc);
+            continue;
+          }
+        }
+      } catch (error) {
+        // If loading fails, regenerate
+      }
+
+      nodesToProcess.push(node);
+    }
+
+    return { nodesToProcess, existingDocs };
+  }
+
+  /**
+   * Simple hash function for comparing source code
+   */
+  private hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return hash.toString(16);
+  }
+
+  /**
    * Generate documentation for the entire codebase
+   * Optimized to skip nodes that already have documentation
    */
   async generateCodebaseDocs(
     analysisResult: AnalysisResult,
     workspaceUri: vscode.Uri,
-    useAI: boolean = true
+    useAI: boolean = true,
+    forceRegenerate: boolean = false
   ): Promise<CodebaseDocumentation> {
     this.workspaceRoot = workspaceUri.fsPath;
     this.docsFolder = path.join(this.workspaceRoot, '.doc_sync');
@@ -124,15 +181,6 @@ export class CodebaseDocGenerator {
     vscode.window.showInformationMessage(llmStatus);
 
     // Create folder structure if it doesn't exist
-    // .doc_sync/
-    //   ├── graph/
-    //   │   └── graph.json (ReactFlow optimized)
-    //   ├── nodes/
-    //   │   └── <node_id>.json (individual node details)
-    //   ├── docs/
-    //   │   └── *.md (markdown documentation)
-    //   ├── search.json (RAG search index)
-    //   └── metadata.json (project metadata)
     const foldersToCreate = [
       this.docsFolder,
       this.nodesFolder,
@@ -149,20 +197,43 @@ export class CodebaseDocGenerator {
     const { nodes, edges } = analysisResult.graph;
     const projectName = path.basename(this.workspaceRoot);
 
+    // Check which nodes already have docs (skip them unless forceRegenerate)
+    const existingDocs = new Map<string, ComponentDoc>();
+    let nodesToProcess = nodes;
+    
+    if (!forceRegenerate) {
+      const { nodesToProcess: remaining, existingDocs: cached } = 
+        await this.loadExistingDocsAndFilter(nodes);
+      nodesToProcess = remaining;
+      cached.forEach((doc, id) => existingDocs.set(id, doc));
+      
+      if (cached.size > 0) {
+        vscode.window.showInformationMessage(
+          `⚡ Skipping ${cached.size} nodes with existing docs, processing ${remaining.length} new/changed nodes`
+        );
+      }
+    }
+
     // Generate documentation for each component
     // Priority: Agent > LLM > Rule-based
     let componentDocs: ComponentDoc[];
     
-    if (this.useAgent) {
+    if (nodesToProcess.length === 0) {
+      // All nodes have existing docs
+      componentDocs = Array.from(existingDocs.values());
+    } else if (this.useAgent) {
       // Use intelligent AI Agent with LangChain for documentation
-      componentDocs = await this.generateComponentDocsWithAgent(nodes, edges);
+      const newDocs = await this.generateComponentDocsWithAgent(nodesToProcess, edges);
+      componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
     } else if (this.useLLM) {
       // Process nodes in batches to avoid overwhelming the API
-      componentDocs = await this.generateComponentDocsWithLLM(nodes, edges);
+      const newDocs = await this.generateComponentDocsWithLLM(nodesToProcess, edges);
+      componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
     } else {
-      componentDocs = nodes.map(node => 
+      const newDocs = nodesToProcess.map(node => 
         this.generateComponentDoc(node, edges, nodes)
       );
+      componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
     }
 
     // Analyze architecture

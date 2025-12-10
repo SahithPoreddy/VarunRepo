@@ -27,12 +27,22 @@ interface ParsedElement {
 /**
  * Java parser using java-parser library for proper AST-based parsing
  * This provides accurate hierarchical relationships for Spring Boot projects
+ * Detects Controller→Service→Repository layer relationships
  */
 export class JavaAstParser {
   private fileUri: vscode.Uri | null = null;
   private filePath: string = '';
   private content: string = '';
   private lines: string[] = [];
+  
+  // Spring Boot layer detection
+  private static readonly SPRING_LAYERS = {
+    controller: ['RestController', 'Controller', 'RequestMapping'],
+    service: ['Service', 'Component'],
+    repository: ['Repository', 'JpaRepository', 'CrudRepository'],
+    configuration: ['Configuration', 'Bean'],
+    entity: ['Entity', 'Table', 'Document']
+  };
 
   async parse(fileUri: vscode.Uri, isEntryPoint: boolean = false): Promise<ParseResult> {
     const document = await vscode.workspace.openTextDocument(fileUri);
@@ -54,6 +64,7 @@ export class JavaAstParser {
 
       // Build nodes with proper parent-child relationships
       const classMap = new Map<string, string>(); // className -> nodeId
+      const layerMap = new Map<string, { nodeId: string; layer: string; name: string }>(); // Track Spring layers
       
       for (const element of elements) {
         const node = this.createNode(element);
@@ -61,6 +72,12 @@ export class JavaAstParser {
         
         if (element.type === 'class' || element.type === 'interface') {
           classMap.set(element.name, node.id);
+          
+          // Detect Spring Boot layer
+          const layer = this.detectSpringLayer(element.annotations || []);
+          if (layer) {
+            layerMap.set(element.name, { nodeId: node.id, layer, name: element.name });
+          }
         }
 
         // Add containment edge for methods
@@ -95,6 +112,9 @@ export class JavaAstParser {
           }
         }
       }
+
+      // Detect Spring Boot dependencies from field injections (@Autowired)
+      this.extractSpringDependencies(nodes, edges, layerMap);
 
       // Extract import relationships
       this.extractImports(edges);
@@ -756,5 +776,146 @@ export class JavaAstParser {
     }
 
     return { nodes, edges };
+  }
+
+  /**
+   * Detect which Spring Boot layer a class belongs to based on annotations
+   */
+  private detectSpringLayer(annotations: string[]): string | null {
+    for (const annotation of annotations) {
+      // Check controller layer
+      if (JavaAstParser.SPRING_LAYERS.controller.some(a => annotation.includes(a))) {
+        return 'controller';
+      }
+      // Check service layer
+      if (JavaAstParser.SPRING_LAYERS.service.some(a => annotation.includes(a))) {
+        return 'service';
+      }
+      // Check repository layer
+      if (JavaAstParser.SPRING_LAYERS.repository.some(a => annotation.includes(a))) {
+        return 'repository';
+      }
+      // Check configuration
+      if (JavaAstParser.SPRING_LAYERS.configuration.some(a => annotation.includes(a))) {
+        return 'configuration';
+      }
+      // Check entity
+      if (JavaAstParser.SPRING_LAYERS.entity.some(a => annotation.includes(a))) {
+        return 'entity';
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Extract Spring Boot dependencies from @Autowired fields and constructor injection
+   * Creates edges: Controller → Service → Repository
+   */
+  private extractSpringDependencies(
+    nodes: CodeNode[],
+    edges: CodeEdge[],
+    layerMap: Map<string, { nodeId: string; layer: string; name: string }>
+  ): void {
+    // Find @Autowired or constructor-injected fields
+    const autowiredPattern = /@Autowired\s+(?:private\s+)?(\w+)\s+\w+;/g;
+    const constructorInjectionPattern = /(?:public\s+)?(\w+)\s*\(\s*(?:(?:@\w+\s+)?(?:final\s+)?(\w+)\s+\w+\s*,?\s*)+\)/g;
+    const fieldInjectionPattern = /(?:private|protected)\s+(?:final\s+)?(\w+)(?:<[^>]+>)?\s+(\w+)\s*;/g;
+
+    let match;
+
+    // Extract autowired dependencies
+    while ((match = autowiredPattern.exec(this.content)) !== null) {
+      const dependencyType = match[1];
+      this.createDependencyEdge(dependencyType, edges, layerMap);
+    }
+
+    // Extract from constructor injection (common Spring pattern)
+    // Look for constructor with typed parameters
+    const constructorPattern = /public\s+\w+\s*\(([^)]+)\)/g;
+    while ((match = constructorPattern.exec(this.content)) !== null) {
+      const params = match[1];
+      // Extract each parameter type
+      const paramPattern = /(?:@\w+\s+)?(?:final\s+)?(\w+)(?:<[^>]+>)?\s+\w+/g;
+      let paramMatch;
+      while ((paramMatch = paramPattern.exec(params)) !== null) {
+        const dependencyType = paramMatch[1];
+        // Skip primitive types and common types
+        if (!['String', 'int', 'long', 'boolean', 'Integer', 'Long', 'Boolean', 'List', 'Map', 'Set'].includes(dependencyType)) {
+          this.createDependencyEdge(dependencyType, edges, layerMap);
+        }
+      }
+    }
+
+    // Also look at all class fields for potential dependencies
+    while ((match = fieldInjectionPattern.exec(this.content)) !== null) {
+      const fieldType = match[1];
+      // Check if this type is a known Spring component
+      if (layerMap.has(fieldType)) {
+        this.createDependencyEdge(fieldType, edges, layerMap);
+      }
+    }
+  }
+
+  /**
+   * Create a dependency edge between Spring components
+   */
+  private createDependencyEdge(
+    dependencyType: string,
+    edges: CodeEdge[],
+    layerMap: Map<string, { nodeId: string; layer: string; name: string }>
+  ): void {
+    const dependency = layerMap.get(dependencyType);
+    if (dependency) {
+      // Find the source class (the class containing the @Autowired field)
+      // We need to find which class in this file is using this dependency
+      const classPattern = /class\s+(\w+)/g;
+      let classMatch;
+      while ((classMatch = classPattern.exec(this.content)) !== null) {
+        const sourceClassName = classMatch[1];
+        const source = layerMap.get(sourceClassName);
+        if (source && source.name !== dependencyType) {
+          // Create edge based on layer relationship
+          const label = this.getLayerRelationLabel(source.layer, dependency.layer);
+          
+          // Avoid duplicate edges
+          const edgeExists = edges.some(e => 
+            e.from === source.nodeId && 
+            e.to === dependency.nodeId && 
+            e.type === 'uses'
+          );
+          
+          if (!edgeExists) {
+            edges.push({
+              from: source.nodeId,
+              to: dependency.nodeId,
+              type: 'uses',
+              label
+            });
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Get label for layer relationship
+   */
+  private getLayerRelationLabel(sourceLayer: string, targetLayer: string): string {
+    if (sourceLayer === 'controller' && targetLayer === 'service') {
+      return 'calls service';
+    }
+    if (sourceLayer === 'service' && targetLayer === 'repository') {
+      return 'uses repository';
+    }
+    if (sourceLayer === 'service' && targetLayer === 'service') {
+      return 'calls service';
+    }
+    if (sourceLayer === 'controller' && targetLayer === 'repository') {
+      return 'queries';
+    }
+    if (targetLayer === 'entity') {
+      return 'uses entity';
+    }
+    return 'depends on';
   }
 }

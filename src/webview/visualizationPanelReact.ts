@@ -194,6 +194,8 @@ export class VisualizationPanelReact {
         true // Use AI
       );
 
+      const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs');
+
       // Notify webview that generation completed with docs data
       this.panel?.webview.postMessage({ 
         command: 'docsGenerationComplete',
@@ -201,30 +203,17 @@ export class VisualizationPanelReact {
         usedAI: documentation.generatedWithLLM || documentation.generatedWithAgent
       });
       
-      // Open the generated README.md for user to view
-      const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs');
-      const readmePath = path.join(docsFolder, 'README.md');
-      
-      try {
-        // Check if README exists and open it
-        const readmeUri = vscode.Uri.file(readmePath);
-        const doc = await vscode.workspace.openTextDocument(readmeUri);
-        await vscode.window.showTextDocument(doc, { 
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: true 
-        });
-        
-        vscode.window.showInformationMessage(
-          `✅ AI Documentation generated for ${documentation.components.length} components! Opened README.md`
-        );
-      } catch (openError) {
-        // If README doesn't exist, show the .doc_sync folder
-        const docsFolderUri = vscode.Uri.file(docsFolder);
-        vscode.commands.executeCommand('revealInExplorer', docsFolderUri);
-        vscode.window.showInformationMessage(
-          `✅ AI Documentation generated for ${documentation.components.length} components! Check .doc_sync folder.`
-        );
-      }
+      // Show success message - DON'T open README.md automatically
+      // User can view docs in the modal when clicking on nodes
+      vscode.window.showInformationMessage(
+        `✅ AI Documentation generated for ${documentation.components.length} components! Click on any node to see detailed docs.`,
+        'Open Docs Folder'
+      ).then(selection => {
+        if (selection === 'Open Docs Folder') {
+          const docsFolderUri = vscode.Uri.file(docsFolder);
+          vscode.commands.executeCommand('revealInExplorer', docsFolderUri);
+        }
+      });
 
     } catch (error) {
       console.error('Failed to generate documentation:', error);
