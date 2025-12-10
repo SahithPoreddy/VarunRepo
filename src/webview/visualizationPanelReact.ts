@@ -72,6 +72,8 @@ export class VisualizationPanelReact {
         this.pendingMessages = [];
         // Send current branch info
         this.sendCurrentBranchInfo();
+        // Also load and send docs if available
+        await this.loadAndSendDocs();
         break;
 
       case 'getGraph':
@@ -81,6 +83,8 @@ export class VisualizationPanelReact {
         }
         // Also send branch info
         this.sendCurrentBranchInfo();
+        // Also load and send docs if available
+        await this.loadAndSendDocs();
         break;
 
       case 'getNodeDetails':
@@ -97,6 +101,10 @@ export class VisualizationPanelReact {
       
       case 'changePersona':
         await this.changePersona(message.persona);
+        break;
+      
+      case 'loadDocs':
+        await this.loadAndSendDocs();
         break;
       
       case 'openFile':
@@ -133,6 +141,35 @@ export class VisualizationPanelReact {
       command: 'apiKeyStatus',
       configured: !!apiKey
     });
+  }
+
+  /**
+   * Load docs.json and send to webview
+   */
+  private async loadAndSendDocs() {
+    try {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        return;
+      }
+
+      const docsJsonPath = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs.json');
+      const fs = await import('fs');
+      
+      if (fs.existsSync(docsJsonPath)) {
+        const docsContent = fs.readFileSync(docsJsonPath, 'utf8');
+        const docsData = JSON.parse(docsContent);
+        
+        console.log(`Loaded docs.json with ${Object.keys(docsData.nodes || {}).length} nodes`);
+        
+        this.panel?.webview.postMessage({
+          command: 'docsLoaded',
+          docs: docsData
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load docs.json:', error);
+    }
   }
 
   private async handleConfigureApiKey() {
@@ -202,6 +239,9 @@ export class VisualizationPanelReact {
         docsCount: documentation.components.length,
         usedAI: documentation.generatedWithLLM || documentation.generatedWithAgent
       });
+      
+      // Load and send the generated docs.json to webview
+      await this.loadAndSendDocs();
       
       // Show success message - DON'T open README.md automatically
       // User can view docs in the modal when clicking on nodes

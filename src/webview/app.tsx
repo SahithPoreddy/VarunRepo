@@ -583,19 +583,595 @@ const CustomNode = ({ data }: { data: {
 
 const nodeTypes = { custom: CustomNode };
 
+// ============ Full Documentation Panel ============
+const DocsPanel = ({ 
+  docsData, 
+  onClose,
+  onNodeClick
+}: { 
+  docsData: {
+    version: string;
+    projectName: string;
+    generatedAt: string;
+    architecture: { overview: string; layers: string[]; patterns: string[] };
+    nodes: Record<string, any>;
+    generatedWithAI: boolean;
+  };
+  onClose: () => void;
+  onNodeClick: (nodeId: string) => void;
+}) => {
+  const [activeSection, setActiveSection] = useState<'overview' | 'components' | 'architecture'>('overview');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [expandedNode, setExpandedNode] = useState<string | null>(null);
+  
+  const nodeList = Object.values(docsData.nodes || {});
+  const nodeTypes = Array.from(new Set(nodeList.map((n: any) => n.type)));
+  
+  // Filter nodes based on search and type
+  const filteredNodes = nodeList.filter((node: any) => {
+    const matchesSearch = !searchTerm || 
+      node.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      node.aiSummary?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = selectedType === 'all' || node.type === selectedType;
+    return matchesSearch && matchesType;
+  });
+
+  // Render markdown content safely
+  const renderMarkdown = (content: string): string => {
+    if (!content) return '';
+    try {
+      return marked(content) as string;
+    } catch {
+      return content;
+    }
+  };
+
+  return (
+    <div 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1100,
+      }} 
+      onClick={onClose}
+    >
+      <div 
+        style={{
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+          borderRadius: '16px',
+          width: '95%',
+          maxWidth: '1200px',
+          height: '90vh',
+          overflow: 'hidden',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.5)',
+          border: '1px solid #334155',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
+          padding: '20px 24px',
+          borderBottom: '1px solid #334155',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '24px', color: '#fff', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              📚 {docsData.projectName} Documentation
+              {docsData.generatedWithAI && (
+                <span style={{
+                  background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
+                  color: '#0f172a',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                }}>
+                  🤖 AI Generated
+                </span>
+              )}
+            </h1>
+            <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>
+              Generated: {new Date(docsData.generatedAt).toLocaleString()} • {nodeList.length} components
+            </p>
+          </div>
+          <button 
+            onClick={onClose}
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: 'none',
+              borderRadius: '10px',
+              width: '40px',
+              height: '40px',
+              cursor: 'pointer',
+              color: '#fff',
+              fontSize: '18px',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid #334155',
+          background: '#0f172a',
+          padding: '0 24px',
+        }}>
+          {[
+            { id: 'overview', label: '📋 Overview', icon: '📋' },
+            { id: 'components', label: '🧩 Components', icon: '🧩' },
+            { id: 'architecture', label: '🏗️ Architecture', icon: '🏗️' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSection(tab.id as any)}
+              style={{
+                padding: '14px 20px',
+                border: 'none',
+                background: activeSection === tab.id ? 'rgba(100, 255, 218, 0.1)' : 'transparent',
+                color: activeSection === tab.id ? '#64ffda' : '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 500,
+                borderBottom: activeSection === tab.id ? '2px solid #64ffda' : '2px solid transparent',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
+          
+          {/* Overview Section */}
+          {activeSection === 'overview' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Project Overview */}
+              <div style={{
+                background: 'rgba(100, 255, 218, 0.05)',
+                padding: '20px',
+                borderRadius: '12px',
+                border: '1px solid rgba(100, 255, 218, 0.2)',
+              }}>
+                <h2 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '18px' }}>
+                  Project Overview
+                </h2>
+                <div 
+                  className="markdown-content"
+                  style={{ color: '#e2e8f0', lineHeight: 1.7 }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
+                />
+              </div>
+
+              {/* Quick Stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <div style={{
+                  background: '#1e293b',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#64ffda' }}>{nodeList.length}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Components</div>
+                </div>
+                <div style={{
+                  background: '#1e293b',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#a78bfa' }}>{nodeTypes.length}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Component Types</div>
+                </div>
+                <div style={{
+                  background: '#1e293b',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#fbbf24' }}>{docsData.architecture.patterns.length}</div>
+                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Patterns Detected</div>
+                </div>
+              </div>
+
+              {/* Patterns */}
+              {docsData.architecture.patterns.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid #334155',
+                }}>
+                  <h3 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '16px' }}>
+                    🎯 Patterns & Practices
+                  </h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {docsData.architecture.patterns.map((pattern, i) => (
+                      <span key={i} style={{
+                        background: 'rgba(251, 191, 36, 0.1)',
+                        color: '#fbbf24',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                      }}>
+                        {pattern}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Layers */}
+              {docsData.architecture.layers.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid #334155',
+                }}>
+                  <h3 style={{ margin: '0 0 12px 0', color: '#60a5fa', fontSize: '16px' }}>
+                    📁 Directory Structure
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {docsData.architecture.layers.map((layer, i) => (
+                      <div key={i} style={{
+                        background: 'rgba(96, 165, 250, 0.1)',
+                        color: '#60a5fa',
+                        padding: '8px 12px',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontFamily: 'monospace',
+                      }}>
+                        {layer}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Components Section */}
+          {activeSection === 'components' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Search and Filter */}
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="🔍 Search components..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  style={{
+                    flex: 1,
+                    minWidth: '200px',
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    color: '#fff',
+                    fontSize: '14px',
+                  }}
+                />
+                <select
+                  value={selectedType}
+                  onChange={e => setSelectedType(e.target.value)}
+                  style={{
+                    background: '#1e293b',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="all">All Types</option>
+                  {nodeTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Component List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {filteredNodes.map((node: any) => (
+                  <div 
+                    key={node.id}
+                    style={{
+                      background: expandedNode === node.id 
+                        ? 'linear-gradient(135deg, rgba(100, 255, 218, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)'
+                        : '#1e293b',
+                      borderRadius: '12px',
+                      border: expandedNode === node.id 
+                        ? '1px solid rgba(100, 255, 218, 0.3)'
+                        : '1px solid #334155',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {/* Component Header */}
+                    <div 
+                      style={{
+                        padding: '16px 20px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                      onClick={() => setExpandedNode(expandedNode === node.id ? null : node.id)}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '20px' }}>{typeIcons[node.type] || '📄'}</span>
+                        <div>
+                          <div style={{ color: '#fff', fontWeight: 600, fontSize: '15px' }}>{node.name}</div>
+                          <div style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
+                            {node.type} • {node.relativePath}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {node.aiComplexity && (
+                          <span style={{
+                            background: node.aiComplexity === 'low' ? 'rgba(34, 197, 94, 0.2)' :
+                                       node.aiComplexity === 'high' ? 'rgba(239, 68, 68, 0.2)' :
+                                       'rgba(251, 191, 36, 0.2)',
+                            color: node.aiComplexity === 'low' ? '#22c55e' :
+                                   node.aiComplexity === 'high' ? '#ef4444' : '#fbbf24',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            textTransform: 'uppercase',
+                          }}>
+                            {node.aiComplexity}
+                          </span>
+                        )}
+                        <span style={{ 
+                          color: '#64748b', 
+                          fontSize: '18px',
+                          transition: 'transform 0.2s',
+                          transform: expandedNode === node.id ? 'rotate(180deg)' : 'rotate(0deg)',
+                        }}>
+                          ▼
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Expanded Content */}
+                    {expandedNode === node.id && (
+                      <div style={{
+                        padding: '0 20px 20px 20px',
+                        borderTop: '1px solid rgba(100, 255, 218, 0.1)',
+                      }}>
+                        {/* AI Summary */}
+                        {node.aiSummary && (
+                          <div style={{ marginTop: '16px' }}>
+                            <div style={{ color: '#64ffda', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                              🤖 AI Summary
+                            </div>
+                            <div 
+                              className="markdown-content"
+                              style={{ color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiSummary) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* AI Description */}
+                        {node.aiDescription && (
+                          <div style={{ marginTop: '16px' }}>
+                            <div style={{ color: '#a78bfa', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                              📝 Description
+                            </div>
+                            <div 
+                              className="markdown-content"
+                              style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.6 }}
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiDescription) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Technical Details */}
+                        {node.technicalDetails && (
+                          <div style={{ 
+                            marginTop: '16px',
+                            background: 'rgba(0,0,0,0.3)',
+                            padding: '12px',
+                            borderRadius: '8px',
+                          }}>
+                            <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                              📋 Technical Details
+                            </div>
+                            <div 
+                              className="markdown-content"
+                              style={{ color: '#94a3b8', fontSize: '13px', lineHeight: 1.5 }}
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.technicalDetails) }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Key Features */}
+                        {node.aiKeyFeatures?.length > 0 && (
+                          <div style={{ marginTop: '16px' }}>
+                            <div style={{ color: '#fbbf24', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                              ✨ Key Features
+                            </div>
+                            <ul style={{ margin: 0, paddingLeft: '20px', color: '#e2e8f0' }}>
+                              {node.aiKeyFeatures.map((feature: string, i: number) => (
+                                <li key={i} style={{ marginBottom: '4px', fontSize: '13px' }}>{feature}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Patterns */}
+                        {node.patterns?.length > 0 && (
+                          <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {node.patterns.map((pattern: string, i: number) => (
+                              <span key={i} style={{
+                                background: 'rgba(251, 191, 36, 0.1)',
+                                color: '#fbbf24',
+                                padding: '4px 10px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                              }}>
+                                {pattern}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* View in Graph Button */}
+                        <button
+                          onClick={() => {
+                            onNodeClick(node.id);
+                            onClose();
+                          }}
+                          style={{
+                            marginTop: '16px',
+                            background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px 16px',
+                            color: '#0f172a',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          📍 View in Graph
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {filteredNodes.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
+                  <p>No components match your search</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Architecture Section */}
+          {activeSection === 'architecture' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Architecture Overview */}
+              <div style={{
+                background: 'rgba(100, 255, 218, 0.05)',
+                padding: '24px',
+                borderRadius: '12px',
+                border: '1px solid rgba(100, 255, 218, 0.2)',
+              }}>
+                <h2 style={{ margin: '0 0 16px 0', color: '#64ffda', fontSize: '20px' }}>
+                  🏗️ Architecture Overview
+                </h2>
+                <div 
+                  className="markdown-content"
+                  style={{ color: '#e2e8f0', lineHeight: 1.8, fontSize: '15px' }}
+                  dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
+                />
+              </div>
+
+              {/* Component Type Distribution */}
+              <div style={{
+                background: '#1e293b',
+                padding: '20px',
+                borderRadius: '12px',
+                border: '1px solid #334155',
+              }}>
+                <h3 style={{ margin: '0 0 16px 0', color: '#60a5fa', fontSize: '16px' }}>
+                  📊 Component Distribution
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  {nodeTypes.map(type => {
+                    const count = nodeList.filter((n: any) => n.type === type).length;
+                    const percentage = Math.round((count / nodeList.length) * 100);
+                    return (
+                      <div key={type} style={{
+                        background: 'rgba(96, 165, 250, 0.1)',
+                        padding: '12px 16px',
+                        borderRadius: '8px',
+                        minWidth: '120px',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span>{typeIcons[type] || '📄'}</span>
+                          <span style={{ color: '#fff', fontWeight: 600 }}>{type}</span>
+                        </div>
+                        <div style={{ color: '#64ffda', fontSize: '20px', fontWeight: 700 }}>{count}</div>
+                        <div style={{ color: '#64748b', fontSize: '12px' }}>{percentage}%</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Patterns */}
+              <div style={{
+                background: '#1e293b',
+                padding: '20px',
+                borderRadius: '12px',
+                border: '1px solid #334155',
+              }}>
+                <h3 style={{ margin: '0 0 16px 0', color: '#fbbf24', fontSize: '16px' }}>
+                  🎯 Detected Patterns & Practices
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
+                  {docsData.architecture.patterns.map((pattern, i) => (
+                    <div key={i} style={{
+                      background: 'rgba(251, 191, 36, 0.1)',
+                      padding: '12px 16px',
+                      borderRadius: '8px',
+                      color: '#fbbf24',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}>
+                      <span>✓</span>
+                      <span>{pattern}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ Popup Component ============
 const NodePopup = ({ 
   data, 
   onClose, 
   onSendToCline,
   onOpenFile,
-  allNodes 
+  allNodes,
+  nodeDocs
 }: { 
   data: PopupData; 
   onClose: () => void;
   onSendToCline: (nodeId: string, query: string) => void;
   onOpenFile: (filePath: string, line?: number) => void;
   allNodes: NodeData[];
+  nodeDocs?: any; // Docs from docs.json
 }) => {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'cline'>('overview');
@@ -604,7 +1180,7 @@ const NodePopup = ({
   const colors = nodeColors[data?.type] || nodeColors.file;
   const icon = typeIcons[data?.type] || '📄';
 
-  // Safely get metadata
+  // Safely get metadata - merge with nodeDocs if available
   const metadata = data?.metadata || {};
   const filePath = data?.filePath || '';
   const label = data?.label || 'Unknown';
@@ -650,18 +1226,29 @@ const NodePopup = ({
     }
   };
 
-  // Get arrays safely
-  const parameters = Array.isArray(metadata.parameters) ? metadata.parameters : [];
-  const imports = Array.isArray(metadata.imports) ? metadata.imports : [];
-  const exports = Array.isArray(metadata.exports) ? metadata.exports : [];
-  const patterns = Array.isArray(metadata.patterns) ? metadata.patterns : [];
-  const usageExamples = Array.isArray(metadata.usageExamples) ? metadata.usageExamples : [];
-  const keywords = Array.isArray(metadata.keywords) ? metadata.keywords : [];
-  const returnType = safeString(metadata.returnType);
+  // Get arrays safely - merge metadata with nodeDocs (nodeDocs takes priority for AI content)
+  const parameters = Array.isArray(nodeDocs?.parameters) ? nodeDocs.parameters : 
+                     Array.isArray(metadata.parameters) ? metadata.parameters : [];
+  const imports = Array.isArray(nodeDocs?.dependencies) ? nodeDocs.dependencies : 
+                  Array.isArray(metadata.imports) ? metadata.imports : [];
+  const exports = Array.isArray(nodeDocs?.dependents) ? nodeDocs.dependents : 
+                  Array.isArray(metadata.exports) ? metadata.exports : [];
+  const patterns = Array.isArray(nodeDocs?.patterns) ? nodeDocs.patterns : 
+                   Array.isArray(metadata.patterns) ? metadata.patterns : [];
+  const usageExamples = Array.isArray(nodeDocs?.usageExamples) ? nodeDocs.usageExamples : 
+                        Array.isArray(metadata.usageExamples) ? metadata.usageExamples : [];
+  const keywords = Array.isArray(nodeDocs?.keywords) ? nodeDocs.keywords : 
+                   Array.isArray(metadata.keywords) ? metadata.keywords : [];
+  const aiKeyFeatures = Array.isArray(nodeDocs?.aiKeyFeatures) ? nodeDocs.aiKeyFeatures : [];
+  const returnType = safeString(nodeDocs?.returnType || metadata.returnType);
   const docstring = safeString(metadata.docstring);
-  const aiSummary = safeString(metadata.aiSummary);
-  const aiDescription = safeString(metadata.aiDescription);
-  const technicalDetails = safeString(metadata.technicalDetails);
+  
+  // AI documentation - prioritize nodeDocs (from docs.json)
+  const aiSummary = safeString(nodeDocs?.aiSummary || metadata.aiSummary);
+  const aiDescription = safeString(nodeDocs?.aiDescription || metadata.aiDescription);
+  const technicalDetails = safeString(nodeDocs?.technicalDetails || metadata.technicalDetails);
+  const aiPurpose = safeString(nodeDocs?.aiPurpose);
+  const aiComplexity = nodeDocs?.aiComplexity || 'medium';
 
   return (
     <div 
@@ -898,7 +1485,7 @@ const NodePopup = ({
                   <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '8px', fontWeight: 600 }}>
                     💡 USAGE EXAMPLES
                   </div>
-                  {usageExamples.map((example, i) => (
+                  {usageExamples.map((example: any, i: number) => (
                     <div 
                       key={i}
                       style={{ 
@@ -923,7 +1510,7 @@ const NodePopup = ({
                   flexWrap: 'wrap',
                   gap: '6px',
                 }}>
-                  {keywords.map((keyword, i) => (
+                  {keywords.map((keyword: any, i: number) => (
                     <span key={i} style={{
                       background: 'rgba(139, 92, 246, 0.2)',
                       color: '#a78bfa',
@@ -1160,8 +1747,109 @@ const NodePopup = ({
                 </div>
               )}
 
+              {/* AI Documentation */}
+              {(aiSummary || aiDescription || technicalDetails) && (
+                <div style={{
+                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(100, 255, 218, 0.3)',
+                }}>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: '#64ffda', 
+                    marginBottom: '12px', 
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
+                    paddingBottom: '8px'
+                  }}>
+                    <span>🤖</span> AI-GENERATED DOCUMENTATION
+                  </div>
+                  
+                  {aiSummary && (
+                    <div style={{ marginBottom: aiDescription || technicalDetails ? '12px' : 0 }}>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#94a3b8', 
+                        marginBottom: '6px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}>
+                        Summary
+                      </div>
+                      <div 
+                        style={{ 
+                          color: '#e2e8f0', 
+                          fontSize: '14px', 
+                          lineHeight: 1.7 
+                        }}
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(aiSummary) }}
+                      />
+                    </div>
+                  )}
+
+                  {aiDescription && (
+                    <div style={{ marginBottom: technicalDetails ? '12px' : 0 }}>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#94a3b8', 
+                        marginBottom: '6px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}>
+                        Description
+                      </div>
+                      <div 
+                        style={{ 
+                          color: '#e2e8f0', 
+                          fontSize: '14px', 
+                          lineHeight: 1.7 
+                        }}
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(aiDescription) }}
+                      />
+                    </div>
+                  )}
+
+                  {technicalDetails && (
+                    <div style={{
+                      background: 'rgba(0,0,0,0.3)',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(100, 255, 218, 0.1)',
+                    }}>
+                      <div style={{ 
+                        fontSize: '11px', 
+                        color: '#94a3b8', 
+                        marginBottom: '8px',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}>
+                        📋 Technical Details
+                      </div>
+                      <div 
+                        style={{ 
+                          color: '#cbd5e1', 
+                          fontSize: '13px', 
+                          lineHeight: 1.6
+                        }}
+                        className="markdown-content"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(technicalDetails) }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Empty State */}
-              {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && patterns.length === 0 && usageExamples.length === 0 && (
+              {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && patterns.length === 0 && usageExamples.length === 0 && !aiSummary && !aiDescription && !technicalDetails && (
                 <div style={{ 
                   textAlign: 'center', 
                   padding: '40px 20px',
@@ -1248,12 +1936,29 @@ const App = () => {
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [statsPanelOpen, setStatsPanelOpen] = useState(true);
   
+  // Docs state - loaded from docs.json for instant access
+  const [docsData, setDocsData] = useState<{
+    version: string;
+    projectName: string;
+    generatedAt: string;
+    architecture: { overview: string; layers: string[]; patterns: string[] };
+    nodes: Record<string, any>;
+    generatedWithAI: boolean;
+  } | null>(null);
+  const [showDocsPanel, setShowDocsPanel] = useState(false);
+  
   // Track expanded nodes for collapsible tree
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   
   // Prevent duplicate requests and re-renders
   const isRequestingGraphRef = React.useRef(false);
   const hasInitializedRef = React.useRef(false);
+
+  // Helper: Get docs for a specific node from docsData
+  const getNodeDocs = useCallback((nodeId: string) => {
+    if (!docsData?.nodes) return null;
+    return docsData.nodes[nodeId] || null;
+  }, [docsData]);
 
   // Build parent-children map for efficient lookup
   // Uses BOTH node.parentId AND edges with type 'contains' or 'calls'
@@ -1620,6 +2325,15 @@ const App = () => {
           setIsGeneratingDocs(false);
           break;
 
+        case 'docsLoaded':
+          // Receive docs.json data for React rendering
+          if (message.docs) {
+            console.log('Docs loaded:', Object.keys(message.docs.nodes || {}).length, 'nodes');
+            setDocsData(message.docs);
+            setDocsGenerated(true);
+          }
+          break;
+
         case 'apiKeyStatus':
           setApiKeyConfigured(message.configured);
           break;
@@ -1921,20 +2635,6 @@ const App = () => {
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats</span>
-                {currentBranch && (
-                  <span style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '4px',
-                    background: 'rgba(167, 139, 250, 0.15)',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                  }}>
-                    <span>🌿</span>
-                    <span style={{ color: '#a78bfa', fontWeight: 600 }}>{currentBranch}</span>
-                  </span>
-                )}
                 <span style={{ color: '#94a3b8', fontSize: '12px' }}>
                   {stats.visible}/{stats.nodes} nodes
                 </span>
@@ -2038,6 +2738,32 @@ const App = () => {
                   <>📝 Generate AI Docs</>
                 )}
               </button>
+              
+              {/* View Full Documentation Button - only show if docs exist */}
+              {docsData && (
+                <button
+                  onClick={() => setShowDocsPanel(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                  }}
+                  title="View full project documentation"
+                >
+                  📚 View Docs
+                </button>
+              )}
+              
               {/* Sync Changes Button */}
               <button
                 onClick={handleSyncChanges}
@@ -2141,6 +2867,30 @@ const App = () => {
           onSendToCline={handleSendToCline}
           onOpenFile={handleOpenFile}
           allNodes={graphData?.nodes || []}
+          nodeDocs={getNodeDocs(popupData.nodeId)}
+        />
+      )}
+
+      {/* Full Documentation Panel */}
+      {showDocsPanel && docsData && (
+        <DocsPanel 
+          docsData={docsData}
+          onClose={() => setShowDocsPanel(false)}
+          onNodeClick={(nodeId) => {
+            const node = graphData?.nodes.find(n => n.id === nodeId);
+            if (node) {
+              setPopupData({
+                nodeId: node.id,
+                label: node.label,
+                type: node.type,
+                filePath: node.filePath,
+                description: node.description,
+                parentId: node.parentId,
+                metadata: node.metadata,
+              });
+              vscode.postMessage({ command: 'getNodeDetails', nodeId: node.id });
+            }
+          }}
         />
       )}
 

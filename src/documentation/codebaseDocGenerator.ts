@@ -181,11 +181,11 @@ export class CodebaseDocGenerator {
     vscode.window.showInformationMessage(llmStatus);
 
     // Create folder structure if it doesn't exist
+    // Note: 'docs' folder no longer needed - all docs are in docs.json
     const foldersToCreate = [
       this.docsFolder,
       this.nodesFolder,
-      this.graphFolder,
-      path.join(this.docsFolder, 'docs')
+      this.graphFolder
     ];
     
     for (const folder of foldersToCreate) {
@@ -668,7 +668,60 @@ export class CodebaseDocGenerator {
     const graphPath = path.join(this.graphFolder, 'graph.json');
     fs.writeFileSync(graphPath, JSON.stringify(graphData, null, 2));
 
-    // 2. Save individual node JSON files (for detailed view)
+    // 2. Save comprehensive docs.json with all node documentation for React rendering
+    const docsJsonPath = path.join(this.docsFolder, 'docs.json');
+    const docsJson = {
+      version: '2.0',
+      projectName: documentation.projectName,
+      generatedAt: documentation.generatedAt,
+      totalFiles: documentation.totalFiles,
+      totalComponents: documentation.totalComponents,
+      languages: documentation.languages,
+      entryPoints: documentation.entryPoints,
+      architecture: documentation.architecture,
+      generatedWithAI: documentation.generatedWithLLM || documentation.generatedWithAgent,
+      aiModel: documentation.llmModel,
+      nodes: {} as Record<string, any>
+    };
+
+    // Build nodes object with all documentation fields
+    documentation.components.forEach(comp => {
+      docsJson.nodes[comp.id] = {
+        id: comp.id,
+        name: comp.name,
+        type: comp.type,
+        language: comp.language,
+        filePath: comp.filePath,
+        relativePath: comp.relativePath,
+        startLine: comp.startLine,
+        endLine: comp.endLine,
+        // AI-generated documentation
+        aiSummary: comp.aiSummary || comp.summary,
+        aiDescription: comp.description || '',
+        technicalDetails: comp.technicalDetails || '',
+        aiPurpose: comp.aiPurpose || '',
+        aiKeyFeatures: comp.aiKeyFeatures || [],
+        aiComplexity: comp.aiComplexity || 'medium',
+        // Code analysis
+        dependencies: comp.dependencies,
+        dependents: comp.dependents,
+        patterns: comp.patterns,
+        // Function/class details
+        parameters: comp.parameters || [],
+        returnType: comp.returnType || '',
+        props: comp.props || [],
+        hooks: comp.hooks || [],
+        // Usage
+        usageExamples: comp.usageExamples || [],
+        keywords: comp.keywords || [],
+        // Persona-specific docs
+        personaSpecific: comp.personaSpecific || {}
+      };
+    });
+
+    fs.writeFileSync(docsJsonPath, JSON.stringify(docsJson, null, 2));
+
+    // 3. Save individual node JSON files (for detailed view and caching)
     documentation.components.forEach(comp => {
       const nodeFileName = this.sanitizeFileName(comp.id) + '.json';
       const nodePath = path.join(this.nodesFolder, nodeFileName);
@@ -681,21 +734,34 @@ export class CodebaseDocGenerator {
         relativePath: comp.relativePath,
         startLine: comp.startLine,
         endLine: comp.endLine,
-        summary: comp.summary,
+        // AI documentation
+        summary: comp.aiSummary || comp.summary,
+        aiSummary: comp.aiSummary,
+        aiDescription: comp.description,
         technicalDetails: comp.technicalDetails,
+        aiPurpose: comp.aiPurpose,
+        aiKeyFeatures: comp.aiKeyFeatures,
+        aiComplexity: comp.aiComplexity,
+        // Code analysis
         dependencies: comp.dependencies,
         dependents: comp.dependents,
         patterns: comp.patterns,
+        // Function/class details
         props: comp.props,
         hooks: comp.hooks,
         parameters: comp.parameters,
         returnType: comp.returnType,
+        // Usage
+        usageExamples: comp.usageExamples,
+        keywords: comp.keywords,
+        personaSpecific: comp.personaSpecific,
+        // Source code for reference
         sourceCode: comp.sourceCode
       };
       fs.writeFileSync(nodePath, JSON.stringify(nodeData, null, 2));
     });
 
-    // 3. Save project metadata
+    // 4. Save project metadata
     const metadataPath = path.join(this.docsFolder, 'metadata.json');
     const metadata = {
       projectName: documentation.projectName,
@@ -708,26 +774,12 @@ export class CodebaseDocGenerator {
     };
     fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
 
-    // 4. Save markdown overview in docs folder
-    const docsDir = path.join(this.docsFolder, 'docs');
-    const markdownPath = path.join(docsDir, 'README.md');
-    const markdown = this.generateMarkdownOverview(documentation);
-    fs.writeFileSync(markdownPath, markdown);
-
-    // 5. Save individual component markdown docs
-    documentation.components.forEach(comp => {
-      const compFileName = comp.name.replace(/[^a-zA-Z0-9]/g, '_') + '.md';
-      const compPath = path.join(docsDir, compFileName);
-      const compMarkdown = this.generateComponentMarkdown(comp);
-      fs.writeFileSync(compPath, compMarkdown);
-    });
-
-    // 6. Save RAG search index
+    // 4. Save RAG search index (JSON-based for semantic search)
     const searchPath = path.join(this.docsFolder, 'search.json');
     const chunks = this.generateRAGChunks(documentation);
     fs.writeFileSync(searchPath, JSON.stringify(chunks, null, 2));
 
-    // 7. Save node index for quick lookup
+    // 5. Save node index for quick lookup
     const nodeIndexPath = path.join(this.nodesFolder, '_index.json');
     const nodeIndex = documentation.components.map(comp => ({
       id: comp.id,
@@ -737,6 +789,9 @@ export class CodebaseDocGenerator {
       fileName: this.sanitizeFileName(comp.id) + '.json'
     }));
     fs.writeFileSync(nodeIndexPath, JSON.stringify(nodeIndex, null, 2));
+    
+    // Note: Markdown files are no longer generated - all docs are in docs.json
+    // and rendered directly by React UI with the 'marked' library
   }
 
   /**
