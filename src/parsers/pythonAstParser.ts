@@ -158,6 +158,12 @@ export class PythonAstParser {
       // Flatten tree while maintaining parent-child relationships
       const allElements = this.flattenElements(rootElements);
 
+      // Create module node for the file (so root elements have an edge)
+      const fileName = fileUri.fsPath.split(/[\\/]/).pop() || 'module';
+      const baseName = fileName.replace(/\.py$/, '');
+      const moduleNode = this.createModuleNode(baseName);
+      nodes.push(moduleNode);
+
       // Build nodes and edges
       const classMap = new Map<string, string>();
 
@@ -173,6 +179,14 @@ export class PythonAstParser {
         if (element.parentId) {
           edges.push({
             from: element.parentId,
+            to: node.id,
+            type: 'contains',
+            label: 'contains'
+          });
+        } else {
+          // Root-level elements are contained by the module
+          edges.push({
+            from: moduleNode.id,
             to: node.id,
             type: 'contains',
             label: 'contains'
@@ -198,13 +212,6 @@ export class PythonAstParser {
 
       // Detect and add framework-specific edges
       this.extractFrameworkDependencies(allElements, edges);
-
-      // If no nodes found but it's an entry point, create a module node
-      if (nodes.length === 0 && isEntryPoint) {
-        const fileName = fileUri.fsPath.split(/[\\/]/).pop() || 'module';
-        const baseName = fileName.replace(/\.py$/, '');
-        nodes.push(this.createModuleNode(baseName));
-      }
 
       return { nodes, edges };
     } catch (error) {

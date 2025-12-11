@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { CodeGraph, CodeNode, CodeEdge, AnalysisResult, AnalysisError } from '../types/types';
 import { JavaAstParser } from '../parsers/javaAstParser';
 import { ReactParser } from '../parsers/reactParser';
-import { PythonParser } from '../parsers/pythonParser';
 import { PythonAstParser } from '../parsers/pythonAstParser';
 import { GraphBuilder } from '../graph/graphBuilder';
 import { EntryPointDetector } from './entryPointDetector';
@@ -12,12 +11,10 @@ import * as path from 'path';
 export class WorkspaceAnalyzer {
   private javaAstParser: JavaAstParser;
   private reactParser: ReactParser;
-  private pythonParser: PythonParser;
   private pythonAstParser: PythonAstParser;
   private graphBuilder: GraphBuilder;
   private entryPointDetector: EntryPointDetector;
   private importAnalyzer: ImportAnalyzer;
-  private useAstParsers: boolean = true; // Use AST parsers by default
 
   // Prevent concurrent analysis
   private isAnalyzing: boolean = false;
@@ -27,7 +24,6 @@ export class WorkspaceAnalyzer {
   constructor() {
     this.javaAstParser = new JavaAstParser();
     this.reactParser = new ReactParser();
-    this.pythonParser = new PythonParser();
     this.pythonAstParser = new PythonAstParser();
     this.graphBuilder = new GraphBuilder();
     this.entryPointDetector = new EntryPointDetector();
@@ -134,11 +130,7 @@ export class WorkspaceAnalyzer {
             result = await this.reactParser.parse(fileUri, isEntryPointFile);
           } else if (ext === '.py') {
             // Use AST parser for Python (better hierarchy)
-            if (this.useAstParsers) {
-              result = await this.pythonAstParser.parse(fileUri, isEntryPointFile);
-            } else {
-              result = await this.pythonParser.parse(fileUri, isEntryPointFile);
-            }
+            result = await this.pythonAstParser.parse(fileUri, isEntryPointFile);
           } else {
             continue;
           }
@@ -362,13 +354,8 @@ export class WorkspaceAnalyzer {
       const result = await this.reactParser.parse(fileUri);
       return result.nodes;
     } else if (ext === '.py') {
-      if (this.useAstParsers) {
-        const result = await this.pythonAstParser.parse(fileUri);
-        return result.nodes;
-      } else {
-        const result = await this.pythonParser.parse(fileUri);
-        return result.nodes;
-      }
+      const result = await this.pythonAstParser.parse(fileUri);
+      return result.nodes;
     }
 
     return [];

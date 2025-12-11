@@ -232,12 +232,54 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    cursor: 'pointer',
     userSelect: 'none' as const,
   },
   statsPanelHeaderCollapsed: {
     borderRadius: '12px',
     borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
+  },
+  statsCloseButton: {
+    background: 'rgba(239, 68, 68, 0.1)',
+    border: 'none',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    color: '#ef4444',
+    cursor: 'pointer',
+    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+  },
+  statsOpenButton: {
+    background: 'rgba(30, 41, 59, 0.95)',
+    backdropFilter: 'blur(10px)',
+    border: '1px solid rgba(100, 255, 218, 0.2)',
+    borderRadius: '8px',
+    padding: '8px 12px',
+    color: '#64ffda',
+    cursor: 'pointer',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+    transition: 'all 0.2s ease',
+  },
+  copilotButton: {
+    background: 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
+    border: 'none',
+    borderRadius: '12px',
+    padding: '10px 16px',
+    color: '#ffffff',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    boxShadow: '0 4px 16px rgba(236, 72, 153, 0.4)',
+    transition: 'all 0.2s ease',
   },
   statsPanelToggle: {
     background: 'transparent',
@@ -1947,7 +1989,7 @@ const App = () => {
     generatedWithAI: boolean;
   } | null>(null);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
-  const [showQAPanel, setShowQAPanel] = useState(false);
+  const [showCopilotPanel, setShowCopilotPanel] = useState(false);
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState<{
     answer: string;
@@ -2032,17 +2074,10 @@ const App = () => {
   }, [graphData]);
 
   // Filter out dangling nodes (nodes with no connections)
-  // BUT keep top-level nodes (classes, components, modules) that could be roots
   const nonDanglingNodes = useMemo(() => {
     if (!graphData) return [];
-    // Keep nodes that either:
-    // 1. Have at least one edge connection, OR
-    // 2. Are top-level (no parentId) and are classes/components/modules/functions
-    const topLevelTypes = new Set(['class', 'component', 'module', 'function', 'interface']);
-    const filtered = graphData.nodes.filter(n => 
-      connectedNodeIds.has(n.id) || 
-      (!n.parentId && topLevelTypes.has(n.type))
-    );
+    // Keep only nodes that have at least one edge connection
+    const filtered = graphData.nodes.filter(n => connectedNodeIds.has(n.id));
     console.log(`Filtered ${graphData.nodes.length - filtered.length} dangling nodes, showing ${filtered.length} connected nodes`);
     return filtered;
   }, [graphData, connectedNodeIds]);
@@ -2667,240 +2702,213 @@ const App = () => {
           maskColor="rgba(15, 23, 42, 0.8)"
         />
 
-        {/* Stats Panel */}
+        {/* Stats Panel - Collapsible */}
         <Panel position="top-left">
-          <div style={styles.statsPanelContainer}>
-            {/* Collapsible Header */}
-            <div
-              style={{
-                ...styles.statsPanelHeader,
-                ...(statsPanelOpen ? {} : styles.statsPanelHeaderCollapsed),
-              }}
-              onClick={() => setStatsPanelOpen(!statsPanelOpen)}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats</span>
-                <span style={{ color: '#94a3b8', fontSize: '12px' }}>
-                  {stats.visible}/{stats.nodes} nodes
-                </span>
-              </div>
-              <button
-                style={{
-                  ...styles.statsPanelToggle,
-                  transform: statsPanelOpen ? 'rotate(0deg)' : 'rotate(180deg)',
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setStatsPanelOpen(!statsPanelOpen);
-                }}
-              >
-                ▲
-              </button>
-            </div>
-
-            {/* Collapsible Content */}
-            <div style={{
-              ...styles.statsPanel,
-              ...(statsPanelOpen ? styles.statsPanelExpanded : styles.statsPanelCollapsed),
-            }}>
-              <div style={styles.statItem}>
-                <span style={styles.statValue}>{stats.visible}/{stats.nodes}</span>
-                <span style={styles.statLabel}>Visible/Total</span>
-              </div>
-              <div style={styles.statItem}>
-                <span style={styles.statValue}>{stats.edges}</span>
-                <span style={styles.statLabel}>Connections</span>
-              </div>
-              {/* Generate Docs Button */}
-              <div style={{
-                borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
-                paddingLeft: '15px',
-                marginLeft: '5px',
-                display: 'flex',
-                gap: '10px',
-              }}>
-                <button
-                  onClick={handleGenerateDocs}
-                  disabled={isGeneratingDocs}
-                  style={{
-                    background: isGeneratingDocs
-                      ? 'rgba(100, 255, 218, 0.3)'
-                      : docsGenerated
-                        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                        : 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 14px',
-                    color: isGeneratingDocs ? '#64ffda' : '#0f172a',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isGeneratingDocs ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease',
-                    boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
-                  }}
-                  title={docsGenerated ? "Regenerate AI Documentation" : "Generate AI Documentation for all nodes"}
-                >
-                  {isGeneratingDocs ? (
-                    <>
-                      <span style={{
-                        width: '14px',
-                        height: '14px',
-                        border: '2px solid rgba(100, 255, 218, 0.3)',
-                        borderTop: '2px solid #64ffda',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite',
-                      }} />
-                      Generating...
-                    </>
-                  ) : docsGenerated ? (
-                    <>✅ Regenerate Docs</>
-                  ) : (
-                    <>📝 Generate AI Docs</>
-                  )}
-                </button>
-
-                {/* View Full Documentation Button - only show if docs exist */}
-                {docsData && (
+          {statsPanelOpen ? (
+            <div style={styles.statsPanelContainer}>
+              {/* Header with close button on left */}
+              <div style={styles.statsPanelHeader}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <button
-                    onClick={() => setShowDocsPanel(true)}
+                    onClick={() => setStatsPanelOpen(false)}
+                    style={styles.statsCloseButton}
+                    title="Close stats panel"
+                  >
+                    ✕
+                  </button>
+                  <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats</span>
+                  <span style={{ color: '#94a3b8', fontSize: '12px' }}>
+                    {stats.visible}/{stats.nodes} nodes
+                  </span>
+                </div>
+                {lastSyncTime && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '11px' }}>
+                    <span style={{ color: '#10b981' }}>●</span>
+                    Synced: {lastSyncTime}
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div style={{
+                ...styles.statsPanel,
+                ...styles.statsPanelExpanded,
+              }}>
+                <div style={styles.statItem}>
+                  <span style={styles.statValue}>{stats.visible}/{stats.nodes}</span>
+                  <span style={styles.statLabel}>Visible/Total</span>
+                </div>
+                <div style={styles.statItem}>
+                  <span style={styles.statValue}>{stats.edges}</span>
+                  <span style={styles.statLabel}>Connections</span>
+                </div>
+                {/* Action Buttons */}
+                <div style={{
+                  borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
+                  paddingLeft: '15px',
+                  marginLeft: '5px',
+                  display: 'flex',
+                  gap: '10px',
+                }}>
+                  <button
+                    onClick={handleGenerateDocs}
+                    disabled={isGeneratingDocs}
                     style={{
-                      background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                      background: isGeneratingDocs
+                        ? 'rgba(100, 255, 218, 0.3)'
+                        : docsGenerated
+                          ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                          : 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)',
                       border: 'none',
                       borderRadius: '8px',
                       padding: '8px 14px',
-                      color: '#ffffff',
+                      color: isGeneratingDocs ? '#64ffda' : '#0f172a',
                       fontSize: '12px',
                       fontWeight: 600,
-                      cursor: 'pointer',
+                      cursor: isGeneratingDocs ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
                       transition: 'all 0.2s ease',
-                      boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                      boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
                     }}
-                    title="View full project documentation"
+                    title={docsGenerated ? "Regenerate AI Documentation" : "Generate AI Documentation for all nodes"}
                   >
-                    📚 View Docs
+                    {isGeneratingDocs ? (
+                      <>
+                        <span style={{
+                          width: '14px',
+                          height: '14px',
+                          border: '2px solid rgba(100, 255, 218, 0.3)',
+                          borderTop: '2px solid #64ffda',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                        }} />
+                        Generating...
+                      </>
+                    ) : docsGenerated ? (
+                      <>✅ Regenerate Docs</>
+                    ) : (
+                      <>📝 Generate AI Docs</>
+                    )}
                   </button>
-                )}
 
-                {/* Ask Questions Button */}
-                <button
-                  onClick={() => setShowQAPanel(true)}
-                  style={{
-                    background: 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 14px',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease',
-                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.3)',
-                  }}
-                  title="Ask questions about the codebase"
-                >
-                  💬 Ask Questions
-                </button>
-
-                {/* Sync Changes Button */}
-                <button
-                  onClick={handleSyncChanges}
-                  disabled={isSyncing}
-                  style={{
-                    background: isSyncing
-                      ? 'rgba(139, 92, 246, 0.3)'
-                      : pendingChanges > 0
-                        ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                        : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    padding: '8px 14px',
-                    color: isSyncing ? '#a78bfa' : '#ffffff',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: isSyncing ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.2s ease',
-                    boxShadow: isSyncing ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
-                    position: 'relative' as const,
-                  }}
-                  title="Sync graph with file changes (incremental update)"
-                >
-                  {isSyncing ? (
-                    <>
-                      <span style={{
-                        width: '14px',
-                        height: '14px',
-                        border: '2px solid rgba(139, 92, 246, 0.3)',
-                        borderTop: '2px solid #a78bfa',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite',
-                      }} />
-                      Syncing...
-                    </>
-                  ) : pendingChanges > 0 ? (
-                    <>
-                      🔄 Sync ({pendingChanges})
-                    </>
-                  ) : (
-                    <>🔄 Sync Changes</>
+                  {/* View Full Documentation Button */}
+                  {docsData && (
+                    <button
+                      onClick={() => setShowDocsPanel(true)}
+                      style={{
+                        background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        padding: '8px 14px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                      }}
+                      title="View full project documentation"
+                    >
+                      📚 View Docs
+                    </button>
                   )}
-                  {pendingChanges > 0 && !isSyncing && (
-                    <span style={{
-                      position: 'absolute',
-                      top: '-6px',
-                      right: '-6px',
-                      background: '#ef4444',
-                      color: '#fff',
-                      borderRadius: '50%',
-                      width: '18px',
-                      height: '18px',
-                      fontSize: '10px',
-                      fontWeight: 700,
+
+                  {/* Sync Changes Button */}
+                  <button
+                    onClick={handleSyncChanges}
+                    disabled={isSyncing}
+                    style={{
+                      background: isSyncing
+                        ? 'rgba(139, 92, 246, 0.3)'
+                        : pendingChanges > 0
+                          ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                          : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 14px',
+                      color: isSyncing ? '#a78bfa' : '#ffffff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: isSyncing ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      {pendingChanges}
-                    </span>
-                  )}
-                </button>
+                      gap: '6px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isSyncing ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
+                      position: 'relative' as const,
+                    }}
+                    title="Sync graph with file changes (incremental update)"
+                  >
+                    {isSyncing ? (
+                      <>
+                        <span style={{
+                          width: '14px',
+                          height: '14px',
+                          border: '2px solid rgba(139, 92, 246, 0.3)',
+                          borderTop: '2px solid #a78bfa',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                        }} />
+                        Syncing...
+                      </>
+                    ) : pendingChanges > 0 ? (
+                      <>
+                        🔄 Sync ({pendingChanges})
+                      </>
+                    ) : (
+                      <>🔄 Sync Changes</>
+                    )}
+                    {pendingChanges > 0 && !isSyncing && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        background: '#ef4444',
+                        color: '#fff',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}>
+                        {pendingChanges}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            /* Collapsed state - just show icon button */
+            <button
+              onClick={() => setStatsPanelOpen(true)}
+              style={styles.statsOpenButton}
+              title="Open stats panel"
+            >
+              📊 Stats
+            </button>
+          )}
         </Panel>
 
-        {/* Sync Status Indicator */}
-        {lastSyncTime && (
-          <Panel position="top-right">
-            <div style={{
-              background: 'rgba(30, 41, 59, 0.95)',
-              backdropFilter: 'blur(10px)',
-              borderRadius: '8px',
-              padding: '6px 10px',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-              border: '1px solid rgba(100, 255, 218, 0.2)',
-              color: '#94a3b8',
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}>
-              <span style={{ color: '#10b981' }}>●</span>
-              Synced: {lastSyncTime}
-            </div>
-          </Panel>
-        )}
+        {/* Copilot Button - Top Right */}
+        <Panel position="top-right">
+          <button
+            onClick={() => setShowCopilotPanel(true)}
+            style={styles.copilotButton}
+            title="Ask questions about the codebase"
+          >
+            <span style={{ fontSize: '16px' }}>✨</span>
+            Ask AI
+          </button>
+        </Panel>
 
 
       </ReactFlow>
@@ -2940,323 +2948,307 @@ const App = () => {
         />
       )}
 
-      {/* Q&A Panel */}
-      {showQAPanel && (
+      {/* Copilot Side Panel - Slides in from right */}
+      {showCopilotPanel && (
         <div style={{
           position: 'fixed',
           top: 0,
-          left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: 'blur(8px)',
+          width: '450px',
+          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+          borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
           zIndex: 2000,
           display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          padding: '20px',
+          flexDirection: 'column',
+          boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.5)',
+          animation: 'slideInRight 0.3s ease',
         }}>
+          {/* Header */}
           <div style={{
-            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-            borderRadius: '16px',
-            border: '1px solid rgba(236, 72, 153, 0.3)',
-            width: '100%',
-            maxWidth: '800px',
-            maxHeight: '90vh',
-            overflow: 'hidden',
+            padding: '16px 20px',
+            borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
             display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(100, 255, 218, 0.03)',
           }}>
-            {/* Header */}
-            <div style={{
-              padding: '20px 24px',
-              borderBottom: '1px solid rgba(236, 72, 153, 0.2)',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'rgba(236, 72, 153, 0.05)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '28px' }}>💬</span>
-                <div>
-                  <h2 style={{ margin: 0, color: '#f472b6', fontSize: '20px' }}>
-                    Ask Questions About Your Codebase
-                  </h2>
-                  <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>
-                    Powered by RAG search • Ask anything about your project
-                  </p>
-                </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ fontSize: '24px' }}>✨</span>
+              <div>
+                <h2 style={{ margin: 0, color: '#64ffda', fontSize: '16px', fontWeight: 600 }}>
+                  Codebase AI
+                </h2>
+                <p style={{ margin: '2px 0 0 0', color: '#64748b', fontSize: '11px' }}>
+                  Powered by RAG search
+                </p>
               </div>
-              <button
-                onClick={() => setShowQAPanel(false)}
+            </div>
+            <button
+              onClick={() => setShowCopilotPanel(false)}
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                padding: '6px 10px',
+                color: '#ef4444',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Question Input */}
+          <div style={{ padding: '16px', borderBottom: '1px solid rgba(100, 255, 218, 0.1)' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={qaQuestion}
+                onChange={(e) => setQaQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && qaQuestion.trim() && !qaLoading) {
+                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                  }
+                }}
+                placeholder="Ask about your codebase..."
                 style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  color: '#ef4444',
-                  cursor: 'pointer',
-                  fontSize: '14px',
+                  flex: 1,
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(100, 255, 218, 0.2)',
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  color: '#e2e8f0',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (qaQuestion.trim() && !qaLoading) {
+                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                  }
+                }}
+                disabled={!qaQuestion.trim() || qaLoading}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: qaQuestion.trim() && !qaLoading
+                    ? 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)'
+                    : 'rgba(100, 116, 139, 0.3)',
+                  color: qaQuestion.trim() && !qaLoading ? '#0f172a' : '#64748b',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: qaQuestion.trim() && !qaLoading ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
                 }}
               >
-                ✕ Close
+                {qaLoading ? (
+                  <span style={{
+                    width: '14px',
+                    height: '14px',
+                    border: '2px solid rgba(100, 255, 218, 0.3)',
+                    borderTop: '2px solid #64ffda',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                ) : (
+                  <>➤</>
+                )}
               </button>
             </div>
 
-            {/* Question Input */}
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(100, 255, 218, 0.1)' }}>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <input
-                  type="text"
-                  value={qaQuestion}
-                  onChange={(e) => setQaQuestion(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && qaQuestion.trim() && !qaLoading) {
-                      vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
-                    }
-                  }}
-                  placeholder="E.g., What does the UserService class do? How is authentication handled?"
-                  style={{
-                    flex: 1,
-                    padding: '14px 18px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(236, 72, 153, 0.3)',
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    color: '#e2e8f0',
-                    fontSize: '15px',
-                    outline: 'none',
-                  }}
-                />
+            {/* Quick Questions */}
+            <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {[
+                'Main components',
+                'How does API work',
+                'List services',
+                'Auth flow',
+              ].map((q, i) => (
                 <button
+                  key={i}
                   onClick={() => {
-                    if (qaQuestion.trim() && !qaLoading) {
-                      vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
-                    }
+                    setQaQuestion(q);
+                    vscode.postMessage({ command: 'askQuestion', question: q });
                   }}
-                  disabled={!qaQuestion.trim() || qaLoading}
                   style={{
-                    padding: '14px 24px',
+                    padding: '4px 10px',
                     borderRadius: '12px',
-                    border: 'none',
-                    background: qaQuestion.trim() && !qaLoading
-                      ? 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)'
-                      : 'rgba(100, 116, 139, 0.3)',
-                    color: qaQuestion.trim() && !qaLoading ? '#fff' : '#64748b',
-                    fontSize: '15px',
-                    fontWeight: 600,
-                    cursor: qaQuestion.trim() && !qaLoading ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
+                    border: '1px solid rgba(100, 255, 218, 0.15)',
+                    background: 'rgba(100, 255, 218, 0.05)',
+                    color: '#64ffda',
+                    fontSize: '11px',
+                    cursor: 'pointer',
                   }}
                 >
-                  {qaLoading ? (
-                    <>
-                      <span style={{
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid rgba(255,255,255,0.3)',
-                        borderTop: '2px solid #fff',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite',
-                      }} />
-                      Searching...
-                    </>
-                  ) : (
-                    <>🔍 Ask</>
-                  )}
+                  {q}
                 </button>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              {/* Quick Questions */}
-              <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                <span style={{ color: '#64748b', fontSize: '12px', marginRight: '4px' }}>Try:</span>
-                {[
-                  'What are the main components?',
-                  'How does the API work?',
-                  'List all services',
-                  'Where is authentication?',
-                ].map((q, i) => (
+          {/* Answer Area */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+            {qaAnswer ? (
+              <div>
+                {/* Confidence Badge */}
+                <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{
+                    padding: '3px 8px',
+                    borderRadius: '10px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    background: qaAnswer.confidence === 'high'
+                      ? 'rgba(16, 185, 129, 0.2)'
+                      : qaAnswer.confidence === 'medium'
+                        ? 'rgba(245, 158, 11, 0.2)'
+                        : 'rgba(239, 68, 68, 0.2)',
+                    color: qaAnswer.confidence === 'high'
+                      ? '#10b981'
+                      : qaAnswer.confidence === 'medium'
+                        ? '#f59e0b'
+                        : '#ef4444',
+                  }}>
+                    {qaAnswer.confidence === 'high' ? '✓ High' :
+                      qaAnswer.confidence === 'medium' ? '~ Medium' :
+                        '? Low'}
+                  </span>
+                </div>
+
+                {/* Answer */}
+                <div
+                  className="markdown-content"
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    padding: '14px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(100, 255, 218, 0.1)',
+                    marginBottom: '16px',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
+                />
+
+                {/* Relevant Nodes */}
+                {qaAnswer.relevantNodes.length > 0 && (
+                  <div>
+                    <h4 style={{ color: '#64ffda', margin: '0 0 10px 0', fontSize: '12px', fontWeight: 600 }}>
+                      📍 Related Code
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {qaAnswer.relevantNodes.slice(0, 4).map((node, i) => (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            const graphNode = graphData?.nodes.find(n => n.label === node.name);
+                            if (graphNode) {
+                              setPopupData({
+                                nodeId: graphNode.id,
+                                label: graphNode.label,
+                                type: graphNode.type,
+                                filePath: graphNode.filePath,
+                                description: graphNode.description,
+                                parentId: graphNode.parentId,
+                                metadata: graphNode.metadata,
+                              });
+                              vscode.postMessage({ command: 'getNodeDetails', nodeId: graphNode.id });
+                              setShowCopilotPanel(false);
+                            }
+                          }}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            background: 'rgba(30, 41, 59, 0.8)',
+                            border: '1px solid rgba(100, 255, 218, 0.1)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#64ffda', fontWeight: 600, fontSize: '12px' }}>{node.name}</span>
+                            <span style={{
+                              fontSize: '10px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: 'rgba(100, 255, 218, 0.1)',
+                              color: '#64ffda',
+                            }}>
+                              {node.type}
+                            </span>
+                          </div>
+                          {node.filePath && (
+                            <div style={{ color: '#64748b', fontSize: '10px', marginTop: '4px' }}>
+                              📁 {node.filePath}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                color: '#64748b',
+                padding: '40px 16px',
+              }}>
+                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🤖</div>
+                <p style={{ margin: 0, fontSize: '13px' }}>
+                  Ask anything about your code
+                </p>
+                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#475569' }}>
+                  RAG-powered search finds relevant context
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* History */}
+          {qaHistory.length > 0 && (
+            <div style={{
+              padding: '12px 16px',
+              borderTop: '1px solid rgba(100, 255, 218, 0.1)',
+              background: 'rgba(15, 23, 42, 0.5)',
+            }}>
+              <div style={{ color: '#64748b', fontSize: '10px', marginBottom: '6px' }}>
+                Recent ({qaHistory.length})
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {qaHistory.slice(-4).reverse().map((h, i) => (
                   <button
                     key={i}
                     onClick={() => {
-                      setQaQuestion(q);
-                      vscode.postMessage({ command: 'askQuestion', question: q });
+                      setQaQuestion(h.question);
+                      vscode.postMessage({ command: 'askQuestion', question: h.question });
                     }}
                     style={{
-                      padding: '6px 12px',
-                      borderRadius: '16px',
-                      border: '1px solid rgba(236, 72, 153, 0.2)',
-                      background: 'rgba(236, 72, 153, 0.05)',
-                      color: '#f472b6',
-                      fontSize: '12px',
+                      padding: '3px 8px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(100, 255, 218, 0.15)',
+                      background: 'rgba(100, 255, 218, 0.03)',
+                      color: '#94a3b8',
+                      fontSize: '10px',
                       cursor: 'pointer',
+                      maxWidth: '150px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
+                    title={h.question}
                   >
-                    {q}
+                    {h.question}
                   </button>
                 ))}
               </div>
             </div>
-
-            {/* Answer Area */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
-              {qaAnswer ? (
-                <div>
-                  {/* Confidence Badge */}
-                  <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      padding: '4px 10px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      background: qaAnswer.confidence === 'high'
-                        ? 'rgba(16, 185, 129, 0.2)'
-                        : qaAnswer.confidence === 'medium'
-                          ? 'rgba(245, 158, 11, 0.2)'
-                          : 'rgba(239, 68, 68, 0.2)',
-                      color: qaAnswer.confidence === 'high'
-                        ? '#10b981'
-                        : qaAnswer.confidence === 'medium'
-                          ? '#f59e0b'
-                          : '#ef4444',
-                    }}>
-                      {qaAnswer.confidence === 'high' ? '✓ High Confidence' :
-                        qaAnswer.confidence === 'medium' ? '~ Medium Confidence' :
-                          '? Low Confidence'}
-                    </span>
-                  </div>
-
-                  {/* Answer */}
-                  <div
-                    className="markdown-content"
-                    style={{
-                      background: 'rgba(15, 23, 42, 0.6)',
-                      padding: '20px',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(100, 255, 218, 0.1)',
-                      marginBottom: '20px',
-                    }}
-                    dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
-                  />
-
-                  {/* Relevant Nodes */}
-                  {qaAnswer.relevantNodes.length > 0 && (
-                    <div>
-                      <h4 style={{ color: '#f472b6', margin: '0 0 12px 0', fontSize: '14px' }}>
-                        📍 Relevant Code Locations
-                      </h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        {qaAnswer.relevantNodes.slice(0, 5).map((node, i) => (
-                          <div
-                            key={i}
-                            onClick={() => {
-                              // Find and highlight node in graph
-                              const graphNode = graphData?.nodes.find(n => n.label === node.name);
-                              if (graphNode) {
-                                setPopupData({
-                                  nodeId: graphNode.id,
-                                  label: graphNode.label,
-                                  type: graphNode.type,
-                                  filePath: graphNode.filePath,
-                                  description: graphNode.description,
-                                  parentId: graphNode.parentId,
-                                  metadata: graphNode.metadata,
-                                });
-                                vscode.postMessage({ command: 'getNodeDetails', nodeId: graphNode.id });
-                                setShowQAPanel(false);
-                              }
-                            }}
-                            style={{
-                              padding: '12px 16px',
-                              borderRadius: '8px',
-                              background: 'rgba(30, 41, 59, 0.8)',
-                              border: '1px solid rgba(100, 255, 218, 0.1)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ color: '#64ffda', fontWeight: 600 }}>{node.name}</span>
-                              <span style={{
-                                fontSize: '11px',
-                                padding: '2px 8px',
-                                borderRadius: '4px',
-                                background: 'rgba(100, 255, 218, 0.1)',
-                                color: '#64ffda',
-                              }}>
-                                {node.type}
-                              </span>
-                            </div>
-                            {node.filePath && (
-                              <div style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
-                                📁 {node.filePath}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{
-                  textAlign: 'center',
-                  color: '#64748b',
-                  padding: '60px 20px',
-                }}>
-                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>🤔</div>
-                  <p style={{ margin: 0, fontSize: '16px' }}>
-                    Ask a question to search through your codebase
-                  </p>
-                  <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#475569' }}>
-                    The RAG system will find relevant code and provide context-aware answers
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* History */}
-            {qaHistory.length > 0 && (
-              <div style={{
-                padding: '16px 24px',
-                borderTop: '1px solid rgba(100, 255, 218, 0.1)',
-                background: 'rgba(15, 23, 42, 0.5)',
-              }}>
-                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '8px' }}>
-                  Recent Questions ({qaHistory.length})
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {qaHistory.slice(-5).reverse().map((h, i) => (
-                    <button
-                      key={i}
-                      onClick={() => {
-                        setQaQuestion(h.question);
-                        vscode.postMessage({ command: 'askQuestion', question: h.question });
-                      }}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        border: '1px solid rgba(100, 255, 218, 0.2)',
-                        background: 'rgba(100, 255, 218, 0.05)',
-                        color: '#94a3b8',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        maxWidth: '200px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={h.question}
-                    >
-                      {h.question}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       )}
 
@@ -3278,6 +3270,16 @@ const App = () => {
           to { 
             opacity: 1; 
             transform: translateY(0); 
+          }
+        }
+        @keyframes slideInRight {
+          from { 
+            opacity: 0; 
+            transform: translateX(100%); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateX(0); 
           }
         }
         .react-flow__node:hover {

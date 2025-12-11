@@ -3,6 +3,7 @@ import * as path from 'path';
 import { CodeGraph, CodeNode, CodeEdge, AnalysisResult } from '../types/types';
 import { FileHashCache, getFileHashCache, ChangeDetectionResult } from '../cache/fileHashCache';
 import { WorkspaceAnalyzer } from '../analyzers/workspaceAnalyzer';
+import { ImportAnalyzer } from '../analyzers/importAnalyzer';
 
 /**
  * Result of an incremental update
@@ -30,12 +31,14 @@ export interface IncrementalUpdateResult {
 export class IncrementalGraphUpdater {
   private hashCache: FileHashCache;
   private workspaceAnalyzer: WorkspaceAnalyzer;
+  private importAnalyzer: ImportAnalyzer;
   private currentGraph: CodeGraph | null = null;
   private workspaceRoot: string = '';
 
   constructor() {
     this.hashCache = getFileHashCache();
     this.workspaceAnalyzer = new WorkspaceAnalyzer();
+    this.importAnalyzer = new ImportAnalyzer();
   }
 
   /**
@@ -432,14 +435,17 @@ export class IncrementalGraphUpdater {
 
   /**
    * Rebuild edges for affected files by analyzing imports
+   * This creates proper connections between new/modified files and the rest of the graph
    */
   private async rebuildEdgesForAffectedFiles(affectedFiles: string[]): Promise<number> {
     if (!this.currentGraph) return 0;
 
-    const affectedFileSet = new Set(affectedFiles);
     let addedCount = 0;
+    const existingEdgeKeys = new Set(
+      this.currentGraph.edges.map(e => `${e.from}->${e.to}`)
+    );
 
-    // Build a map of file paths to node IDs for quick lookup
+    // Build a map of file paths to top-level nodes for quick lookup
     const fileToNodes = new Map<string, CodeNode[]>();
     for (const node of this.currentGraph.nodes) {
       if (!fileToNodes.has(node.filePath)) {
@@ -448,41 +454,93 @@ export class IncrementalGraphUpdater {
       fileToNodes.get(node.filePath)!.push(node);
     }
 
-    // For each affected file, find edges to other files based on node relationships
+    // Get all top-level nodes (classes, components, modules) by their name for import matching
+    const nodeNameMap = new Map<string, CodeNode>();
+    for (const node of this.currentGraph.nodes) {
+      if (!node.parentId && (node.type === 'class' || node.type === 'component' || node.type === 'module' || node.type === 'function')) {
+        nodeNameMap.set(node.label, node);
+      }
+    }
+
+    // 1. Analyze imports FROM affected files (what do they import?)
     for (const filePath of affectedFiles) {
-      const nodesInFile = fileToNodes.get(filePath) || [];
-      
-      for (const node of nodesInFile) {
-        // Look for nodes that might reference this node (based on naming patterns)
-        for (const [otherPath, otherNodes] of fileToNodes) {
-          if (otherPath === filePath) continue;
-          
-          for (const otherNode of otherNodes) {
-            // Check if other node might depend on this node (simple heuristic)
-            // More sophisticated edge detection would require full import analysis
-            const key = `${otherNode.id}->${node.id}`;
-            const reverseKey = `${node.id}->${otherNode.id}`;
-            
-            const existingEdgeKeys = new Set(
-              this.currentGraph!.edges.map(e => `${e.from}->${e.to}`)
-            );
-            
-            // If nodes share similar naming or are in parent-child relationship
-            if (node.parentId === otherNode.id || otherNode.parentId === node.id) {
-              if (!existingEdgeKeys.has(key) && !existingEdgeKeys.has(reverseKey)) {
-                this.currentGraph!.edges.push({
-                  from: node.parentId === otherNode.id ? otherNode.id : node.id,
-                  to: node.parentId === otherNode.id ? node.id : otherNode.id,
-                  type: 'contains'
+      try {
+        const fileUri = vscode.Uri.file(filePath);
+        const deps = await this.importAnalyzer.buildDependencyMap(fileUri, this.workspaceRoot);
+        
+        const sourceNodes = fileToNodes.get(filePath) || [];
+        const topLevelSourceNodes = sourceNodes.filter(n => !n.parentId);
+
+        for (const dep of deps) {
+          const targetNodes = fileToNodes.get(dep.targetFile) || [];
+          const topLevelTargetNodes = targetNodes.filter(n => !n.parentId);
+
+          // Create edges from source nodes to target nodes
+          for (const sourceNode of topLevelSourceNodes) {
+            for (const targetNode of topLevelTargetNodes) {
+              const key = `${sourceNode.id}->${targetNode.id}`;
+              if (!existingEdgeKeys.has(key)) {
+                this.currentGraph.edges.push({
+                  from: sourceNode.id,
+                  to: targetNode.id,
+                  type: 'contains',
+                  label: 'imports'
                 });
+                existingEdgeKeys.add(key);
                 addedCount++;
+                console.log(`Created import edge: ${sourceNode.label} -> ${targetNode.label}`);
               }
             }
           }
         }
+      } catch (error) {
+        console.error(`Failed to analyze imports for ${filePath}:`, error);
       }
     }
 
+    // 2. Find files that IMPORT the affected files (reverse lookup)
+    // Check all files in the graph to see if they import the affected files
+    const allFilePaths = Array.from(fileToNodes.keys());
+    for (const filePath of allFilePaths) {
+      if (affectedFiles.includes(filePath)) continue; // Skip affected files themselves
+
+      try {
+        const fileUri = vscode.Uri.file(filePath);
+        const deps = await this.importAnalyzer.buildDependencyMap(fileUri, this.workspaceRoot);
+        
+        // Check if this file imports any of the affected files
+        for (const dep of deps) {
+          if (affectedFiles.includes(dep.targetFile)) {
+            const sourceNodes = fileToNodes.get(filePath) || [];
+            const targetNodes = fileToNodes.get(dep.targetFile) || [];
+            
+            const topLevelSourceNodes = sourceNodes.filter(n => !n.parentId);
+            const topLevelTargetNodes = targetNodes.filter(n => !n.parentId);
+
+            for (const sourceNode of topLevelSourceNodes) {
+              for (const targetNode of topLevelTargetNodes) {
+                const key = `${sourceNode.id}->${targetNode.id}`;
+                if (!existingEdgeKeys.has(key)) {
+                  this.currentGraph.edges.push({
+                    from: sourceNode.id,
+                    to: targetNode.id,
+                    type: 'contains',
+                    label: 'imports'
+                  });
+                  existingEdgeKeys.add(key);
+                  addedCount++;
+                  console.log(`Created reverse import edge: ${sourceNode.label} -> ${targetNode.label}`);
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Skip files with import analysis errors
+      }
+    }
+
+    console.log(`Rebuilt ${addedCount} edges for affected files`);
     return addedCount;
   }
 
