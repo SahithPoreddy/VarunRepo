@@ -182,7 +182,7 @@ const styles = {
   container: {
     width: '100vw',
     height: '100vh',
-    background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+    background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
     position: 'relative' as const,
     overflow: 'hidden',
   },
@@ -192,7 +192,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100vh',
-    color: '#8892b0',
+    color: '#475569',
     gap: '20px',
   },
   spinner: {
@@ -320,8 +320,8 @@ const typeIcons: Record<string, string> = {
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ 
-    rankdir: direction, 
+  dagreGraph.setGraph({
+    rankdir: direction,
     nodesep: 80,      // Vertical spacing between nodes in same rank
     ranksep: 200,     // Horizontal spacing between ranks (parent-child distance)
     marginx: 50,
@@ -356,20 +356,22 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
 };
 
 // ============ Custom Node Component with Expand/Collapse ============
-const CustomNode = ({ data }: { data: { 
-  label: string; 
-  type: string; 
-  isExpanded?: boolean;
-  hasChildren?: boolean;
-  childCount?: number;
-  depth?: number;
-  isRoot?: boolean;
-  nodeId?: string;
-} }) => {
+const CustomNode = ({ data }: {
+  data: {
+    label: string;
+    type: string;
+    isExpanded?: boolean;
+    hasChildren?: boolean;
+    childCount?: number;
+    depth?: number;
+    isRoot?: boolean;
+    nodeId?: string;
+  }
+}) => {
   const colors = nodeColors[data.type] || nodeColors.file;
   const icon = typeIcons[data.type] || '📄';
   const depth = data.depth || 0;
-  
+
   // Calculate glow intensity based on depth
   const glowIntensity = Math.max(0.15, 0.4 - (depth * 0.08));
   const nodeScale = Math.max(0.85, 1 - (depth * 0.03));
@@ -382,17 +384,17 @@ const CustomNode = ({ data }: { data: {
     console.log('Expand button clicked for node:', data.nodeId, 'current expanded:', data.isExpanded);
     // Dispatch custom event that the parent can listen to
     if (data.nodeId) {
-      window.dispatchEvent(new CustomEvent('nodeExpandToggle', { 
-        detail: { nodeId: data.nodeId } 
+      window.dispatchEvent(new CustomEvent('nodeExpandToggle', {
+        detail: { nodeId: data.nodeId }
       }));
     }
   };
-  
+
   // Stop propagation on pointer/mouse down to prevent ReactFlow from handling
   const handlePointerDown = (e: React.PointerEvent | React.MouseEvent) => {
     e.stopPropagation();
   };
-  
+
   return (
     <>
       {/* Left Handle - for incoming edges from parent */}
@@ -407,7 +409,7 @@ const CustomNode = ({ data }: { data: {
           borderRadius: '50%',
         }}
       />
-      
+
       <div
         style={{
           background: `linear-gradient(145deg, ${colors.bg}ee 0%, ${colors.bg}cc 50%, ${colors.bg}aa 100%)`,
@@ -431,9 +433,9 @@ const CustomNode = ({ data }: { data: {
         }}
       >
         {/* Header with icon and type */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
           gap: '10px',
           marginBottom: data.hasChildren ? '8px' : '0',
         }}>
@@ -451,16 +453,16 @@ const CustomNode = ({ data }: { data: {
           }}>
             {icon}
           </div>
-          
+
           {/* Label */}
-          <div style={{ 
-            flex: 1, 
+          <div style={{
+            flex: 1,
             textAlign: 'left',
             overflow: 'hidden',
           }}>
-            <div style={{ 
-              overflow: 'hidden', 
-              textOverflow: 'ellipsis', 
+            <div style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               fontWeight: 700,
               letterSpacing: '0.02em',
@@ -478,7 +480,7 @@ const CustomNode = ({ data }: { data: {
             </div>
           </div>
         </div>
-        
+
         {/* Expand/Collapse button - click to toggle, pointer down to stop propagation */}
         {data.hasChildren && (
           <div
@@ -493,8 +495,8 @@ const CustomNode = ({ data }: { data: {
               gap: '6px',
               padding: '8px 14px',
               borderRadius: '8px',
-              background: data.isExpanded 
-                ? 'rgba(239, 68, 68, 0.25)' 
+              background: data.isExpanded
+                ? 'rgba(239, 68, 68, 0.25)'
                 : 'rgba(34, 197, 94, 0.25)',
               border: `1px solid ${data.isExpanded ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)'}`,
               fontSize: '11px',
@@ -517,7 +519,7 @@ const CustomNode = ({ data }: { data: {
             </span>
           </div>
         )}
-        
+
         {/* Child count badge - shown when collapsed */}
         {data.hasChildren && !data.isExpanded && data.childCount && data.childCount > 0 && (
           <div
@@ -540,7 +542,7 @@ const CustomNode = ({ data }: { data: {
             {data.childCount}
           </div>
         )}
-        
+
         {/* Root indicator */}
         {data.isRoot && (
           <div
@@ -564,7 +566,7 @@ const CustomNode = ({ data }: { data: {
           </div>
         )}
       </div>
-      
+
       {/* Right Handle - for outgoing edges to children */}
       <Handle
         type="source"
@@ -584,11 +586,11 @@ const CustomNode = ({ data }: { data: {
 const nodeTypes = { custom: CustomNode };
 
 // ============ Full Documentation Panel ============
-const DocsPanel = ({ 
-  docsData, 
+const DocsPanel = ({
+  docsData,
   onClose,
   onNodeClick
-}: { 
+}: {
   docsData: {
     version: string;
     projectName: string;
@@ -604,13 +606,13 @@ const DocsPanel = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
-  
+
   const nodeList = Object.values(docsData.nodes || {});
   const nodeTypes = Array.from(new Set(nodeList.map((n: any) => n.type)));
-  
+
   // Filter nodes based on search and type
   const filteredNodes = nodeList.filter((node: any) => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       node.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       node.aiSummary?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = selectedType === 'all' || node.type === selectedType;
@@ -628,7 +630,7 @@ const DocsPanel = ({
   };
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -640,10 +642,10 @@ const DocsPanel = ({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1100,
-      }} 
+      }}
       onClick={onClose}
     >
-      <div 
+      <div
         style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
           borderRadius: '16px',
@@ -687,7 +689,7 @@ const DocsPanel = ({
               Generated: {new Date(docsData.generatedAt).toLocaleString()} • {nodeList.length} components
             </p>
           </div>
-          <button 
+          <button
             onClick={onClose}
             style={{
               background: 'rgba(255,255,255,0.1)',
@@ -737,7 +739,7 @@ const DocsPanel = ({
 
         {/* Content */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-          
+
           {/* Overview Section */}
           {activeSection === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -751,7 +753,7 @@ const DocsPanel = ({
                 <h2 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '18px' }}>
                   Project Overview
                 </h2>
-                <div 
+                <div
                   className="markdown-content"
                   style={{ color: '#e2e8f0', lineHeight: 1.7 }}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
@@ -890,21 +892,21 @@ const DocsPanel = ({
               {/* Component List */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {filteredNodes.map((node: any) => (
-                  <div 
+                  <div
                     key={node.id}
                     style={{
-                      background: expandedNode === node.id 
+                      background: expandedNode === node.id
                         ? 'linear-gradient(135deg, rgba(100, 255, 218, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)'
                         : '#1e293b',
                       borderRadius: '12px',
-                      border: expandedNode === node.id 
+                      border: expandedNode === node.id
                         ? '1px solid rgba(100, 255, 218, 0.3)'
                         : '1px solid #334155',
                       overflow: 'hidden',
                     }}
                   >
                     {/* Component Header */}
-                    <div 
+                    <div
                       style={{
                         padding: '16px 20px',
                         cursor: 'pointer',
@@ -927,10 +929,10 @@ const DocsPanel = ({
                         {node.aiComplexity && (
                           <span style={{
                             background: node.aiComplexity === 'low' ? 'rgba(34, 197, 94, 0.2)' :
-                                       node.aiComplexity === 'high' ? 'rgba(239, 68, 68, 0.2)' :
-                                       'rgba(251, 191, 36, 0.2)',
+                              node.aiComplexity === 'high' ? 'rgba(239, 68, 68, 0.2)' :
+                                'rgba(251, 191, 36, 0.2)',
                             color: node.aiComplexity === 'low' ? '#22c55e' :
-                                   node.aiComplexity === 'high' ? '#ef4444' : '#fbbf24',
+                              node.aiComplexity === 'high' ? '#ef4444' : '#fbbf24',
                             padding: '3px 8px',
                             borderRadius: '4px',
                             fontSize: '11px',
@@ -939,8 +941,8 @@ const DocsPanel = ({
                             {node.aiComplexity}
                           </span>
                         )}
-                        <span style={{ 
-                          color: '#64748b', 
+                        <span style={{
+                          color: '#64748b',
                           fontSize: '18px',
                           transition: 'transform 0.2s',
                           transform: expandedNode === node.id ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -962,7 +964,7 @@ const DocsPanel = ({
                             <div style={{ color: '#64ffda', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
                               🤖 AI Summary
                             </div>
-                            <div 
+                            <div
                               className="markdown-content"
                               style={{ color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}
                               dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiSummary) }}
@@ -976,7 +978,7 @@ const DocsPanel = ({
                             <div style={{ color: '#a78bfa', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
                               📝 Description
                             </div>
-                            <div 
+                            <div
                               className="markdown-content"
                               style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.6 }}
                               dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiDescription) }}
@@ -986,7 +988,7 @@ const DocsPanel = ({
 
                         {/* Technical Details */}
                         {node.technicalDetails && (
-                          <div style={{ 
+                          <div style={{
                             marginTop: '16px',
                             background: 'rgba(0,0,0,0.3)',
                             padding: '12px',
@@ -995,7 +997,7 @@ const DocsPanel = ({
                             <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
                               📋 Technical Details
                             </div>
-                            <div 
+                            <div
                               className="markdown-content"
                               style={{ color: '#94a3b8', fontSize: '13px', lineHeight: 1.5 }}
                               dangerouslySetInnerHTML={{ __html: renderMarkdown(node.technicalDetails) }}
@@ -1082,7 +1084,7 @@ const DocsPanel = ({
                 <h2 style={{ margin: '0 0 16px 0', color: '#64ffda', fontSize: '20px' }}>
                   🏗️ Architecture Overview
                 </h2>
-                <div 
+                <div
                   className="markdown-content"
                   style={{ color: '#e2e8f0', lineHeight: 1.8, fontSize: '15px' }}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
@@ -1158,15 +1160,15 @@ const DocsPanel = ({
 };
 
 // ============ Popup Component ============
-const NodePopup = ({ 
-  data, 
-  onClose, 
+const NodePopup = ({
+  data,
+  onClose,
   onSendToCline,
   onOpenFile,
   allNodes,
   nodeDocs
-}: { 
-  data: PopupData; 
+}: {
+  data: PopupData;
   onClose: () => void;
   onSendToCline: (nodeId: string, query: string) => void;
   onOpenFile: (filePath: string, line?: number) => void;
@@ -1175,7 +1177,7 @@ const NodePopup = ({
 }) => {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'cline'>('overview');
-  
+
   // Safe access to colors
   const colors = nodeColors[data?.type] || nodeColors.file;
   const icon = typeIcons[data?.type] || '📄';
@@ -1227,22 +1229,22 @@ const NodePopup = ({
   };
 
   // Get arrays safely - merge metadata with nodeDocs (nodeDocs takes priority for AI content)
-  const parameters = Array.isArray(nodeDocs?.parameters) ? nodeDocs.parameters : 
-                     Array.isArray(metadata.parameters) ? metadata.parameters : [];
-  const imports = Array.isArray(nodeDocs?.dependencies) ? nodeDocs.dependencies : 
-                  Array.isArray(metadata.imports) ? metadata.imports : [];
-  const exports = Array.isArray(nodeDocs?.dependents) ? nodeDocs.dependents : 
-                  Array.isArray(metadata.exports) ? metadata.exports : [];
-  const patterns = Array.isArray(nodeDocs?.patterns) ? nodeDocs.patterns : 
-                   Array.isArray(metadata.patterns) ? metadata.patterns : [];
-  const usageExamples = Array.isArray(nodeDocs?.usageExamples) ? nodeDocs.usageExamples : 
-                        Array.isArray(metadata.usageExamples) ? metadata.usageExamples : [];
-  const keywords = Array.isArray(nodeDocs?.keywords) ? nodeDocs.keywords : 
-                   Array.isArray(metadata.keywords) ? metadata.keywords : [];
+  const parameters = Array.isArray(nodeDocs?.parameters) ? nodeDocs.parameters :
+    Array.isArray(metadata.parameters) ? metadata.parameters : [];
+  const imports = Array.isArray(nodeDocs?.dependencies) ? nodeDocs.dependencies :
+    Array.isArray(metadata.imports) ? metadata.imports : [];
+  const exports = Array.isArray(nodeDocs?.dependents) ? nodeDocs.dependents :
+    Array.isArray(metadata.exports) ? metadata.exports : [];
+  const patterns = Array.isArray(nodeDocs?.patterns) ? nodeDocs.patterns :
+    Array.isArray(metadata.patterns) ? metadata.patterns : [];
+  const usageExamples = Array.isArray(nodeDocs?.usageExamples) ? nodeDocs.usageExamples :
+    Array.isArray(metadata.usageExamples) ? metadata.usageExamples : [];
+  const keywords = Array.isArray(nodeDocs?.keywords) ? nodeDocs.keywords :
+    Array.isArray(metadata.keywords) ? metadata.keywords : [];
   const aiKeyFeatures = Array.isArray(nodeDocs?.aiKeyFeatures) ? nodeDocs.aiKeyFeatures : [];
   const returnType = safeString(nodeDocs?.returnType || metadata.returnType);
   const docstring = safeString(metadata.docstring);
-  
+
   // AI documentation - prioritize nodeDocs (from docs.json)
   const aiSummary = safeString(nodeDocs?.aiSummary || metadata.aiSummary);
   const aiDescription = safeString(nodeDocs?.aiDescription || metadata.aiDescription);
@@ -1251,7 +1253,7 @@ const NodePopup = ({
   const aiComplexity = nodeDocs?.aiComplexity || 'medium';
 
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: 0,
@@ -1263,10 +1265,10 @@ const NodePopup = ({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-      }} 
+      }}
       onClick={onClose}
     >
-      <div 
+      <div
         style={{
           background: '#1e293b',
           borderRadius: '12px',
@@ -1291,16 +1293,16 @@ const NodePopup = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>{icon}</span>
             <div>
-              <h2 style={{ 
-                margin: 0, 
-                fontSize: '18px', 
-                fontWeight: 600, 
-                color: '#fff' 
+              <h2 style={{
+                margin: 0,
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#fff'
               }}>
                 {label}
               </h2>
-              <span style={{ 
-                fontSize: '12px', 
+              <span style={{
+                fontSize: '12px',
                 color: 'rgba(255,255,255,0.7)',
                 textTransform: 'uppercase',
               }}>
@@ -1308,7 +1310,7 @@ const NodePopup = ({
               </span>
             </div>
           </div>
-          <button 
+          <button
             onClick={onClose}
             style={{
               background: 'rgba(255,255,255,0.1)',
@@ -1361,14 +1363,14 @@ const NodePopup = ({
           maxHeight: 'calc(80vh - 140px)',
           background: '#0f172a',
         }}>
-          
+
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              
+
               {/* File Path */}
               {filePath && (
-                <div 
+                <div
                   onClick={() => onOpenFile(filePath, metadata.lineStart)}
                   style={{
                     background: '#1e293b',
@@ -1402,10 +1404,10 @@ const NodePopup = ({
                 <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
                   📝 DESCRIPTION
                 </div>
-                <div 
+                <div
                   style={{ margin: 0, color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}
                   className="markdown-content"
-                  dangerouslySetInnerHTML={{ 
+                  dangerouslySetInnerHTML={{
                     __html: renderMarkdown(aiSummary || aiDescription || data?.description || data?.content || docstring || 'No description available.')
                   }}
                 />
@@ -1419,10 +1421,10 @@ const NodePopup = ({
                   borderRadius: '12px',
                   border: '1px solid rgba(100, 255, 218, 0.3)',
                 }}>
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: '#64ffda', 
-                    marginBottom: '12px', 
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#64ffda',
+                    marginBottom: '12px',
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
@@ -1433,12 +1435,12 @@ const NodePopup = ({
                     <span>🤖</span> AI DOCUMENTATION
                   </div>
                   {aiDescription && (
-                    <div 
-                      style={{ 
-                        margin: '0 0 12px 0', 
-                        color: '#e2e8f0', 
-                        fontSize: '14px', 
-                        lineHeight: 1.7 
+                    <div
+                      style={{
+                        margin: '0 0 12px 0',
+                        color: '#e2e8f0',
+                        fontSize: '14px',
+                        lineHeight: 1.7
                       }}
                       className="markdown-content"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(aiDescription) }}
@@ -1452,18 +1454,18 @@ const NodePopup = ({
                       marginTop: '8px',
                       border: '1px solid rgba(100, 255, 218, 0.1)',
                     }}>
-                      <div style={{ 
-                        fontSize: '11px', 
-                        color: '#94a3b8', 
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
                         marginBottom: '8px',
-                        fontWeight: 600 
+                        fontWeight: 600
                       }}>
                         📋 Technical Details
                       </div>
-                      <div 
-                        style={{ 
-                          color: '#cbd5e1', 
-                          fontSize: '13px', 
+                      <div
+                        style={{
+                          color: '#cbd5e1',
+                          fontSize: '13px',
                           lineHeight: 1.6
                         }}
                         className="markdown-content"
@@ -1486,9 +1488,9 @@ const NodePopup = ({
                     💡 USAGE EXAMPLES
                   </div>
                   {usageExamples.map((example: any, i: number) => (
-                    <div 
+                    <div
                       key={i}
-                      style={{ 
+                      style={{
                         background: 'rgba(0,0,0,0.2)',
                         padding: '8px 12px',
                         borderRadius: '6px',
@@ -1560,7 +1562,7 @@ const NodePopup = ({
           {/* Details Tab */}
           {activeTab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              
+
               {/* Parameters */}
               {parameters.length > 0 && (
                 <div style={{
@@ -1680,10 +1682,10 @@ const NodePopup = ({
                   <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
                     📖 DOCUMENTATION
                   </div>
-                  <pre style={{ 
-                    margin: 0, 
-                    color: '#e2e8f0', 
-                    fontSize: '13px', 
+                  <pre style={{
+                    margin: 0,
+                    color: '#e2e8f0',
+                    fontSize: '13px',
                     whiteSpace: 'pre-wrap',
                     fontFamily: 'inherit',
                   }}>
@@ -1755,10 +1757,10 @@ const NodePopup = ({
                   borderRadius: '12px',
                   border: '1px solid rgba(100, 255, 218, 0.3)',
                 }}>
-                  <div style={{ 
-                    fontSize: '12px', 
-                    color: '#64ffda', 
-                    marginBottom: '12px', 
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#64ffda',
+                    marginBottom: '12px',
                     fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
@@ -1768,12 +1770,12 @@ const NodePopup = ({
                   }}>
                     <span>🤖</span> AI-GENERATED DOCUMENTATION
                   </div>
-                  
+
                   {aiSummary && (
                     <div style={{ marginBottom: aiDescription || technicalDetails ? '12px' : 0 }}>
-                      <div style={{ 
-                        fontSize: '11px', 
-                        color: '#94a3b8', 
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
                         marginBottom: '6px',
                         fontWeight: 600,
                         textTransform: 'uppercase',
@@ -1781,11 +1783,11 @@ const NodePopup = ({
                       }}>
                         Summary
                       </div>
-                      <div 
-                        style={{ 
-                          color: '#e2e8f0', 
-                          fontSize: '14px', 
-                          lineHeight: 1.7 
+                      <div
+                        style={{
+                          color: '#e2e8f0',
+                          fontSize: '14px',
+                          lineHeight: 1.7
                         }}
                         className="markdown-content"
                         dangerouslySetInnerHTML={{ __html: renderMarkdown(aiSummary) }}
@@ -1795,9 +1797,9 @@ const NodePopup = ({
 
                   {aiDescription && (
                     <div style={{ marginBottom: technicalDetails ? '12px' : 0 }}>
-                      <div style={{ 
-                        fontSize: '11px', 
-                        color: '#94a3b8', 
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
                         marginBottom: '6px',
                         fontWeight: 600,
                         textTransform: 'uppercase',
@@ -1805,11 +1807,11 @@ const NodePopup = ({
                       }}>
                         Description
                       </div>
-                      <div 
-                        style={{ 
-                          color: '#e2e8f0', 
-                          fontSize: '14px', 
-                          lineHeight: 1.7 
+                      <div
+                        style={{
+                          color: '#e2e8f0',
+                          fontSize: '14px',
+                          lineHeight: 1.7
                         }}
                         className="markdown-content"
                         dangerouslySetInnerHTML={{ __html: renderMarkdown(aiDescription) }}
@@ -1824,9 +1826,9 @@ const NodePopup = ({
                       borderRadius: '8px',
                       border: '1px solid rgba(100, 255, 218, 0.1)',
                     }}>
-                      <div style={{ 
-                        fontSize: '11px', 
-                        color: '#94a3b8', 
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#94a3b8',
                         marginBottom: '8px',
                         fontWeight: 600,
                         textTransform: 'uppercase',
@@ -1834,10 +1836,10 @@ const NodePopup = ({
                       }}>
                         📋 Technical Details
                       </div>
-                      <div 
-                        style={{ 
-                          color: '#cbd5e1', 
-                          fontSize: '13px', 
+                      <div
+                        style={{
+                          color: '#cbd5e1',
+                          fontSize: '13px',
                           lineHeight: 1.6
                         }}
                         className="markdown-content"
@@ -1850,8 +1852,8 @@ const NodePopup = ({
 
               {/* Empty State */}
               {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && patterns.length === 0 && usageExamples.length === 0 && !aiSummary && !aiDescription && !technicalDetails && (
-                <div style={{ 
-                  textAlign: 'center', 
+                <div style={{
+                  textAlign: 'center',
                   padding: '40px 20px',
                   color: '#64748b',
                 }}>
@@ -1875,7 +1877,7 @@ const NodePopup = ({
                   Describe what changes you want Cline to make to <strong style={{ color: '#64ffda' }}>{label}</strong>.
                 </p>
               </div>
-              
+
               <textarea
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -1893,7 +1895,7 @@ const NodePopup = ({
                   fontFamily: 'inherit',
                 }}
               />
-              
+
               <button
                 onClick={handleSendToCline}
                 disabled={!query.trim()}
@@ -1926,7 +1928,6 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [popupData, setPopupData] = useState<PopupData | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [docsGenerated, setDocsGenerated] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean | null>(null);
@@ -1935,7 +1936,7 @@ const App = () => {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [statsPanelOpen, setStatsPanelOpen] = useState(true);
-  
+
   // Docs state - loaded from docs.json for instant access
   const [docsData, setDocsData] = useState<{
     version: string;
@@ -1946,10 +1947,19 @@ const App = () => {
     generatedWithAI: boolean;
   } | null>(null);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
-  
+  const [showQAPanel, setShowQAPanel] = useState(false);
+  const [qaQuestion, setQaQuestion] = useState('');
+  const [qaAnswer, setQaAnswer] = useState<{
+    answer: string;
+    relevantNodes: Array<{ name: string; type: string; summary: string; filePath: string; score: number }>;
+    confidence: 'high' | 'medium' | 'low';
+  } | null>(null);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaHistory, setQaHistory] = useState<Array<{ question: string; answer: string; timestamp: Date }>>([]);
+
   // Track expanded nodes for collapsible tree
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  
+
   // Prevent duplicate requests and re-renders
   const isRequestingGraphRef = React.useRef(false);
   const hasInitializedRef = React.useRef(false);
@@ -1966,7 +1976,7 @@ const App = () => {
     if (!graphData) return new Map<string, string[]>();
     const map = new Map<string, string[]>();
     const nodeIds = new Set(graphData.nodes.map(n => n.id));
-    
+
     // Method 1: From node.parentId (if set)
     graphData.nodes.forEach(node => {
       if (node.parentId && nodeIds.has(node.parentId)) {
@@ -1977,7 +1987,7 @@ const App = () => {
         }
       }
     });
-    
+
     // Method 2: From edges - 'contains' means parent contains child
     // Also consider 'calls' edges for function call hierarchy
     graphData.edges.forEach(edge => {
@@ -1991,13 +2001,13 @@ const App = () => {
         }
       }
     });
-    
+
     // Debug logging
     console.log('Children map built:', {
       totalParents: map.size,
       entries: Array.from(map.entries()).slice(0, 5)
     });
-    
+
     return map;
   }, [graphData]);
 
@@ -2010,113 +2020,64 @@ const App = () => {
     return childIds;
   }, [childrenMap]);
 
-  // Get root nodes - prioritize nodes with children so users can expand
-  // If a node has no children, show multiple roots or find expandable nodes
-  // Detect project type based on nodes
-  const projectType = useMemo(() => {
-    if (!graphData) return 'unknown';
-    
-    // Check for React/JS project indicators
-    const hasReactIndicators = graphData.nodes.some(n => {
-      const label = n.label.toLowerCase();
-      return n.type === 'component' || 
-             label.includes('index') || 
-             label.includes('.tsx') || 
-             label.includes('.jsx') ||
-             n.type === 'module';
+  // Get set of all node IDs that have at least one connection (not dangling)
+  const connectedNodeIds = useMemo(() => {
+    if (!graphData) return new Set<string>();
+    const connected = new Set<string>();
+    graphData.edges.forEach(e => {
+      connected.add(e.source);
+      connected.add(e.target);
     });
-    
-    // Check for Java project indicators
-    const hasJavaIndicators = graphData.nodes.some(n => 
-      n.type === 'class' || n.type === 'interface' || n.type === 'enum'
-    );
-    
-    // Check for Python project indicators
-    const hasPythonIndicators = graphData.nodes.some(n => {
-      const label = n.label.toLowerCase();
-      return label.includes('.py') || n.type === 'module';
-    });
-    
-    if (hasReactIndicators && !hasJavaIndicators) return 'react';
-    if (hasJavaIndicators) return 'java';
-    if (hasPythonIndicators) return 'python';
-    return 'unknown';
+    return connected;
   }, [graphData]);
 
-  // Get root nodes based on project type
-  const rootNodes = useMemo(() => {
+  // Filter out dangling nodes (nodes with no connections)
+  // BUT keep top-level nodes (classes, components, modules) that could be roots
+  const nonDanglingNodes = useMemo(() => {
     if (!graphData) return [];
-    
-    // === JAVA PROJECT: Show all classes as roots ===
-    if (projectType === 'java') {
-      const classNodes = graphData.nodes.filter(n => 
-        n.type === 'class' || n.type === 'interface' || n.type === 'enum'
-      );
-      
-      if (classNodes.length > 0) {
-        console.log('Java project: showing all classes as roots:', classNodes.map(n => n.label));
-        return classNodes;
-      }
-      
-      // Fallback: show all top-level nodes
-      const topLevel = graphData.nodes.filter(n => !n.parentId);
-      return topLevel.length > 0 ? topLevel : graphData.nodes;
-    }
-    
-    // === REACT PROJECT: Use entry point hierarchy (index > main > App) ===
-    if (projectType === 'react') {
-      const primaryEntries = graphData.nodes.filter(n => {
-        const label = n.label.toLowerCase();
-        return label === 'index' || label === 'main' || label === 'app' ||
-               label.includes('index.') || label.includes('main.') ||
-               n.type === 'entry' || n.type === 'module';
-      });
-      
-      // Sort to prioritize: index > main > app > module > entry
-      const sortedEntries = primaryEntries.sort((a, b) => {
-        const aLabel = a.label.toLowerCase();
-        const bLabel = b.label.toLowerCase();
-        const priority = (label: string, type: string) => {
-          if (label.includes('index')) return 1;
-          if (label.includes('main')) return 2;
-          if (label.includes('app')) return 3;
-          if (type === 'module') return 4;
-          if (type === 'entry') return 5;
-          return 6;
-        };
-        return priority(aLabel, a.type) - priority(bLabel, b.type);
-      });
-      
-      if (sortedEntries.length > 0) {
-        console.log('React project: primary root node:', sortedEntries[0].label);
-        return [sortedEntries[0]];
-      }
-    }
-    
-    // === PYTHON PROJECT: Show modules and classes as roots ===
-    if (projectType === 'python') {
-      const moduleOrClass = graphData.nodes.filter(n => 
-        n.type === 'module' || n.type === 'class'
-      );
-      
-      if (moduleOrClass.length > 0) {
-        console.log('Python project: showing modules/classes as roots');
-        return moduleOrClass;
-      }
-    }
-    
-    // === DEFAULT: Show nodes without parents ===
-    const noParentNodes = graphData.nodes.filter(node => !node.parentId);
-    if (noParentNodes.length > 0) {
-      console.log('Default: showing nodes without parents');
-      return noParentNodes;
-    }
-    
-    // Final fallback
-    return graphData.nodes;
-  }, [graphData, projectType, childNodeIds]);
+    // Keep nodes that either:
+    // 1. Have at least one edge connection, OR
+    // 2. Are top-level (no parentId) and are classes/components/modules/functions
+    const topLevelTypes = new Set(['class', 'component', 'module', 'function', 'interface']);
+    const filtered = graphData.nodes.filter(n => 
+      connectedNodeIds.has(n.id) || 
+      (!n.parentId && topLevelTypes.has(n.type))
+    );
+    console.log(`Filtered ${graphData.nodes.length - filtered.length} dangling nodes, showing ${filtered.length} connected nodes`);
+    return filtered;
+  }, [graphData, connectedNodeIds]);
 
-  // Get visible nodes based on expanded state (collapsible tree logic)
+  // COLLAPSED BY DEFAULT: Only show root nodes initially
+  // Root nodes = nodes that are NOT the target of any 'contains' edge and are not children
+  const rootNodes = useMemo(() => {
+    if (!graphData || nonDanglingNodes.length === 0) return [];
+    
+    // Find nodes that are contained by other nodes
+    const containedIds = new Set<string>();
+    graphData.edges.forEach(e => {
+      if (e.type === 'contains') {
+        containedIds.add(e.target);
+      }
+    });
+    // Also check parentId
+    nonDanglingNodes.forEach(n => {
+      if (n.parentId) containedIds.add(n.id);
+    });
+    
+    // Root nodes are those not contained by anything
+    const roots = nonDanglingNodes.filter(n => !containedIds.has(n.id));
+    
+    // If no roots found (all nodes have parents), show all non-dangling nodes
+    if (roots.length === 0) {
+      console.log(`No root nodes found, showing all ${nonDanglingNodes.length} connected nodes`);
+      return nonDanglingNodes;
+    }
+    
+    console.log(`Showing ${roots.length} root nodes (collapsed by default)`);
+    return roots;
+  }, [graphData, nonDanglingNodes]);
+
+  // COLLAPSED BY DEFAULT: Only show root nodes + expanded children
   const visibleNodeIds = useMemo(() => {
     if (!graphData) return new Set<string>();
     
@@ -2130,8 +2091,11 @@ const App = () => {
       if (expandedNodes.has(parentId)) {
         const children = childrenMap.get(parentId) || [];
         children.forEach(childId => {
-          visible.add(childId);
-          addChildren(childId); // Recurse for nested children
+          // Only add if not a dangling node
+          if (connectedNodeIds.has(childId)) {
+            visible.add(childId);
+            addChildren(childId); // Recurse for nested children
+          }
         });
       }
     };
@@ -2139,7 +2103,38 @@ const App = () => {
     rootNodes.forEach(node => addChildren(node.id));
     
     return visible;
-  }, [graphData, rootNodes, expandedNodes, childrenMap]);
+  }, [graphData, rootNodes, expandedNodes, childrenMap, connectedNodeIds]);
+
+  // Keep projectType for potential future use but don't use it for filtering
+  const projectType = useMemo(() => {
+    if (!graphData) return 'unknown';
+
+    // Check for React/JS project indicators
+    const hasReactIndicators = graphData.nodes.some(n => {
+      const label = n.label.toLowerCase();
+      return n.type === 'component' ||
+        label.includes('index') ||
+        label.includes('.tsx') ||
+        label.includes('.jsx') ||
+        n.type === 'module';
+    });
+
+    // Check for Java project indicators
+    const hasJavaIndicators = graphData.nodes.some(n =>
+      n.type === 'class' || n.type === 'interface' || n.type === 'enum'
+    );
+
+    // Check for Python project indicators
+    const hasPythonIndicators = graphData.nodes.some(n => {
+      const label = n.label.toLowerCase();
+      return label.includes('.py') || n.type === 'module';
+    });
+
+    if (hasReactIndicators && !hasJavaIndicators) return 'react';
+    if (hasJavaIndicators) return 'java';
+    if (hasPythonIndicators) return 'python';
+    return 'unknown';
+  }, [graphData]);
 
   // Toggle node expansion
   const toggleNodeExpansion = useCallback((nodeId: string) => {
@@ -2163,25 +2158,25 @@ const App = () => {
     if (!graphData) return new Map<string, number>();
     const depthMap = new Map<string, number>();
     const nodeIds = new Set(graphData.nodes.map(n => n.id));
-    
+
     const calculateDepth = (nodeId: string, visited: Set<string> = new Set()): number => {
       if (visited.has(nodeId)) return 0;
       if (depthMap.has(nodeId)) return depthMap.get(nodeId)!;
-      
+
       visited.add(nodeId);
       const node = graphData.nodes.find(n => n.id === nodeId);
-      
+
       if (!node || !node.parentId || !nodeIds.has(node.parentId)) {
         depthMap.set(nodeId, 0);
         return 0;
       }
-      
+
       const parentDepth = calculateDepth(node.parentId, visited);
       const depth = parentDepth + 1;
       depthMap.set(nodeId, depth);
       return depth;
     };
-    
+
     graphData.nodes.forEach(node => calculateDepth(node.id));
     return depthMap;
   }, [graphData]);
@@ -2208,9 +2203,9 @@ const App = () => {
 
   // Build flow nodes with children info for collapsible UI
   const buildFlowNodes = useCallback((
-    data: GraphData, 
-    visibleIds: Set<string>, 
-    expanded: Set<string>, 
+    data: GraphData,
+    visibleIds: Set<string>,
+    expanded: Set<string>,
     childMap: Map<string, string[]>,
     depthMap: Map<string, number>,
     rootIds: Set<string>
@@ -2223,7 +2218,7 @@ const App = () => {
         const isExpanded = expanded.has(node.id);
         const depth = depthMap.get(node.id) || 0;
         const isRoot = rootIds.has(node.id);
-        
+
         return {
           id: node.id,
           type: 'custom',
@@ -2254,7 +2249,7 @@ const App = () => {
         type: 'smoothstep', // Smooth curved edges for hierarchy
         label: edge.label,
         animated: false,
-        style: { 
+        style: {
           stroke: 'url(#edge-gradient)',
           strokeWidth: 2.5,
           strokeLinecap: 'round' as const,
@@ -2265,13 +2260,13 @@ const App = () => {
           width: 18,
           height: 18,
         },
-        labelStyle: { 
-          fill: '#e2e8f0', 
+        labelStyle: {
+          fill: '#e2e8f0',
           fontSize: 11,
           fontWeight: 600,
           background: '#1e293b',
         },
-        labelBgStyle: { 
+        labelBgStyle: {
           fill: 'rgba(30, 41, 59, 0.95)',
           fillOpacity: 0.95,
           rx: 4,
@@ -2287,21 +2282,21 @@ const App = () => {
   // Update graph when visible nodes or expanded state changes (collapsible tree)
   useEffect(() => {
     if (!graphData || visibleNodeIds.size === 0) return;
-    
+
     // Create a hash of visible node IDs AND expanded nodes to compare
     const visibleIdsHash = Array.from(visibleNodeIds).sort().join(',');
     const expandedHash = Array.from(expandedNodes).sort().join(',');
     const stateHash = `${visibleIdsHash}|${expandedHash}`;
-    
+
     // Only update if state actually changed
     if (prevStateHashRef.current === stateHash) {
       return;
     }
     prevStateHashRef.current = stateHash;
-    
+
     const flowNodes = buildFlowNodes(graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds);
     const flowEdges = buildFlowEdges(graphData, visibleNodeIds);
-    
+
     const layouted = getLayoutedElements(flowNodes, flowEdges);
     setNodes(layouted.nodes);
     setEdges(layouted.edges);
@@ -2314,7 +2309,7 @@ const App = () => {
   const initializeGraph = useCallback((data: GraphData) => {
     // Create a simple hash of the graph to detect if it's actually new data
     const graphHash = `${data.nodes.length}-${data.edges.length}-${data.nodes[0]?.id || 'empty'}`;
-    
+
     // Only reset expandedNodes if this is actually different graph data
     if (graphInitializedRef.current !== graphHash) {
       console.log('New graph detected, resetting expanded state');
@@ -2420,11 +2415,32 @@ const App = () => {
           setError(message.message);
           setLoading(false);
           break;
+
+        case 'questionLoading':
+          setQaLoading(message.loading);
+          break;
+
+        case 'questionAnswer':
+          setQaLoading(false);
+          setQaAnswer({
+            answer: message.answer,
+            relevantNodes: message.relevantNodes || [],
+            confidence: message.confidence || 'low'
+          });
+          // Add to history
+          if (qaQuestion.trim()) {
+            setQaHistory(prev => [...prev, {
+              question: qaQuestion,
+              answer: message.answer,
+              timestamp: new Date()
+            }]);
+          }
+          break;
       }
     };
 
     window.addEventListener('message', handleMessage);
-    
+
     // Request initial data only once on mount
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
@@ -2445,7 +2461,7 @@ const App = () => {
         toggleNodeExpansion(customEvent.detail.nodeId);
       }
     };
-    
+
     window.addEventListener('nodeExpandToggle', handleExpandToggle);
     console.log('Expand toggle listener attached');
     return () => {
@@ -2456,7 +2472,7 @@ const App = () => {
 
   // Track if expand button was clicked (to prevent popup on expand)
   const expandClickedRef = React.useRef(false);
-  
+
   useEffect(() => {
     const handleExpandFlag = () => {
       expandClickedRef.current = true;
@@ -2474,10 +2490,10 @@ const App = () => {
       expandClickedRef.current = false;
       return; // Don't show popup if expand was clicked
     }
-    
+
     const nodeData = graphData?.nodes.find(n => n.id === node.id);
     if (!nodeData) return;
-    
+
     // Show popup when clicking on the node
     setPopupData({
       nodeId: node.id,
@@ -2544,24 +2560,6 @@ const App = () => {
     vscode.postMessage({ command: 'syncChanges' });
   }, []);
 
-  // Filter nodes based on search
-  const filteredNodes = useMemo(() => {
-    if (!searchTerm.trim()) return nodes;
-    const term = searchTerm.toLowerCase();
-    return nodes.filter(node => 
-      node.data.label.toLowerCase().includes(term) ||
-      node.data.type.toLowerCase().includes(term)
-    );
-  }, [nodes, searchTerm]);
-
-  // Filter edges based on visible nodes
-  const filteredEdges = useMemo(() => {
-    const nodeIds = new Set(filteredNodes.map(n => n.id));
-    return edges.filter(edge => 
-      nodeIds.has(edge.source) && nodeIds.has(edge.target)
-    );
-  }, [edges, filteredNodes]);
-
   if (loading) {
     return (
       <div style={styles.container}>
@@ -2616,7 +2614,7 @@ const App = () => {
     <div style={styles.container}>
       {/* Inject markdown styles */}
       <style>{markdownStyles}</style>
-      
+
       {/* SVG Definitions for gradients */}
       <svg style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>
@@ -2627,10 +2625,10 @@ const App = () => {
           </linearGradient>
         </defs>
       </svg>
-      
+
       <ReactFlow
-        nodes={searchTerm ? filteredNodes : nodes}
-        edges={searchTerm ? filteredEdges : edges}
+        nodes={nodes}
+        edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
@@ -2644,22 +2642,22 @@ const App = () => {
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{ stroke: '#64ffda', strokeWidth: 2 }}
       >
-        <Background 
-          variant={BackgroundVariant.Dots} 
-          gap={25} 
-          size={1.5} 
-          color="rgba(100, 255, 218, 0.08)" 
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={25}
+          size={1.5}
+          color="rgba(100, 255, 218, 0.08)"
         />
-        <Controls 
-          style={{ 
+        <Controls
+          style={{
             background: 'rgba(30, 41, 59, 0.95)',
             border: '1px solid rgba(100, 255, 218, 0.3)',
             borderRadius: '12px',
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
           }}
         />
-        <MiniMap 
-          style={{ 
+        <MiniMap
+          style={{
             background: 'rgba(30, 41, 59, 0.95)',
             border: '1px solid rgba(100, 255, 218, 0.3)',
             borderRadius: '12px',
@@ -2673,7 +2671,7 @@ const App = () => {
         <Panel position="top-left">
           <div style={styles.statsPanelContainer}>
             {/* Collapsible Header */}
-            <div 
+            <div
               style={{
                 ...styles.statsPanelHeader,
                 ...(statsPanelOpen ? {} : styles.statsPanelHeaderCollapsed),
@@ -2699,7 +2697,7 @@ const App = () => {
                 ▲
               </button>
             </div>
-            
+
             {/* Collapsible Content */}
             <div style={{
               ...styles.statsPanel,
@@ -2713,85 +2711,87 @@ const App = () => {
                 <span style={styles.statValue}>{stats.edges}</span>
                 <span style={styles.statLabel}>Connections</span>
               </div>
-              <div style={{ 
-                borderLeft: '1px solid rgba(100, 255, 218, 0.2)', 
+              {/* Generate Docs Button */}
+              <div style={{
+                borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
                 paddingLeft: '15px',
                 marginLeft: '5px',
+                display: 'flex',
+                gap: '10px',
               }}>
-                <input
-                  type="text"
-                  placeholder="🔍 Search nodes..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.8)',
-                    border: '1px solid rgba(100, 255, 218, 0.2)',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    color: '#e2e8f0',
-                    fontSize: '13px',
-                    width: '180px',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-              {/* Generate Docs Button */}
-            <div style={{ 
-              borderLeft: '1px solid rgba(100, 255, 218, 0.2)', 
-              paddingLeft: '15px',
-              marginLeft: '5px',
-              display: 'flex',
-              gap: '10px',
-            }}>
-              <button
-                onClick={handleGenerateDocs}
-                disabled={isGeneratingDocs}
-                style={{
-                  background: isGeneratingDocs 
-                    ? 'rgba(100, 255, 218, 0.3)'
-                    : docsGenerated 
-                      ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                      : 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '8px 14px',
-                  color: isGeneratingDocs ? '#64ffda' : '#0f172a',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: isGeneratingDocs ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
-                }}
-                title={docsGenerated ? "Regenerate AI Documentation" : "Generate AI Documentation for all nodes"}
-              >
-                {isGeneratingDocs ? (
-                  <>
-                    <span style={{ 
-                      width: '14px', 
-                      height: '14px', 
-                      border: '2px solid rgba(100, 255, 218, 0.3)',
-                      borderTop: '2px solid #64ffda',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
-                    }} />
-                    Generating...
-                  </>
-                ) : docsGenerated ? (
-                  <>✅ Regenerate Docs</>
-                ) : (
-                  <>📝 Generate AI Docs</>
-                )}
-              </button>
-              
-              {/* View Full Documentation Button - only show if docs exist */}
-              {docsData && (
                 <button
-                  onClick={() => setShowDocsPanel(true)}
+                  onClick={handleGenerateDocs}
+                  disabled={isGeneratingDocs}
                   style={{
-                    background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                    background: isGeneratingDocs
+                      ? 'rgba(100, 255, 218, 0.3)'
+                      : docsGenerated
+                        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                        : 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    color: isGeneratingDocs ? '#64ffda' : '#0f172a',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isGeneratingDocs ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
+                  }}
+                  title={docsGenerated ? "Regenerate AI Documentation" : "Generate AI Documentation for all nodes"}
+                >
+                  {isGeneratingDocs ? (
+                    <>
+                      <span style={{
+                        width: '14px',
+                        height: '14px',
+                        border: '2px solid rgba(100, 255, 218, 0.3)',
+                        borderTop: '2px solid #64ffda',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }} />
+                      Generating...
+                    </>
+                  ) : docsGenerated ? (
+                    <>✅ Regenerate Docs</>
+                  ) : (
+                    <>📝 Generate AI Docs</>
+                  )}
+                </button>
+
+                {/* View Full Documentation Button - only show if docs exist */}
+                {docsData && (
+                  <button
+                    onClick={() => setShowDocsPanel(true)}
+                    style={{
+                      background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 14px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                    }}
+                    title="View full project documentation"
+                  >
+                    📚 View Docs
+                  </button>
+                )}
+
+                {/* Ask Questions Button */}
+                <button
+                  onClick={() => setShowQAPanel(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
                     border: 'none',
                     borderRadius: '8px',
                     padding: '8px 14px',
@@ -2803,80 +2803,79 @@ const App = () => {
                     alignItems: 'center',
                     gap: '6px',
                     transition: 'all 0.2s ease',
-                    boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
+                    boxShadow: '0 2px 8px rgba(236, 72, 153, 0.3)',
                   }}
-                  title="View full project documentation"
+                  title="Ask questions about the codebase"
                 >
-                  📚 View Docs
+                  💬 Ask Questions
                 </button>
-              )}
-              
-              {/* Sync Changes Button */}
-              <button
-                onClick={handleSyncChanges}
-                disabled={isSyncing}
-                style={{
-                  background: isSyncing 
-                    ? 'rgba(139, 92, 246, 0.3)'
-                    : pendingChanges > 0
-                      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                      : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '8px 14px',
-                  color: isSyncing ? '#a78bfa' : '#ffffff',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: isSyncing ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isSyncing ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
-                  position: 'relative' as const,
-                }}
-                title="Sync graph with file changes (incremental update)"
-              >
-                {isSyncing ? (
-                  <>
-                    <span style={{ 
-                      width: '14px', 
-                      height: '14px', 
-                      border: '2px solid rgba(139, 92, 246, 0.3)',
-                      borderTop: '2px solid #a78bfa',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
-                    }} />
-                    Syncing...
-                  </>
-                ) : pendingChanges > 0 ? (
-                  <>
-                    🔄 Sync ({pendingChanges})
-                  </>
-                ) : (
-                  <>🔄 Sync Changes</>
-                )}
-                {pendingChanges > 0 && !isSyncing && (
-                  <span style={{
-                    position: 'absolute',
-                    top: '-6px',
-                    right: '-6px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    borderRadius: '50%',
-                    width: '18px',
-                    height: '18px',
-                    fontSize: '10px',
-                    fontWeight: 700,
+
+                {/* Sync Changes Button */}
+                <button
+                  onClick={handleSyncChanges}
+                  disabled={isSyncing}
+                  style={{
+                    background: isSyncing
+                      ? 'rgba(139, 92, 246, 0.3)'
+                      : pendingChanges > 0
+                        ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                        : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    color: isSyncing ? '#a78bfa' : '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isSyncing ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    {pendingChanges}
-                  </span>
-                )}
-              </button>
-            </div>
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: isSyncing ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
+                    position: 'relative' as const,
+                  }}
+                  title="Sync graph with file changes (incremental update)"
+                >
+                  {isSyncing ? (
+                    <>
+                      <span style={{
+                        width: '14px',
+                        height: '14px',
+                        border: '2px solid rgba(139, 92, 246, 0.3)',
+                        borderTop: '2px solid #a78bfa',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }} />
+                      Syncing...
+                    </>
+                  ) : pendingChanges > 0 ? (
+                    <>
+                      🔄 Sync ({pendingChanges})
+                    </>
+                  ) : (
+                    <>🔄 Sync Changes</>
+                  )}
+                  {pendingChanges > 0 && !isSyncing && (
+                    <span style={{
+                      position: 'absolute',
+                      top: '-6px',
+                      right: '-6px',
+                      background: '#ef4444',
+                      color: '#fff',
+                      borderRadius: '50%',
+                      width: '18px',
+                      height: '18px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      {pendingChanges}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </Panel>
@@ -2920,7 +2919,7 @@ const App = () => {
 
       {/* Full Documentation Panel */}
       {showDocsPanel && docsData && (
-        <DocsPanel 
+        <DocsPanel
           docsData={docsData}
           onClose={() => setShowDocsPanel(false)}
           onNodeClick={(nodeId) => {
@@ -2939,6 +2938,326 @@ const App = () => {
             }
           }}
         />
+      )}
+
+      {/* Q&A Panel */}
+      {showQAPanel && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 2000,
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: '20px',
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+            borderRadius: '16px',
+            border: '1px solid rgba(236, 72, 153, 0.3)',
+            width: '100%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid rgba(236, 72, 153, 0.2)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'rgba(236, 72, 153, 0.05)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '28px' }}>💬</span>
+                <div>
+                  <h2 style={{ margin: 0, color: '#f472b6', fontSize: '20px' }}>
+                    Ask Questions About Your Codebase
+                  </h2>
+                  <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>
+                    Powered by RAG search • Ask anything about your project
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowQAPanel(false)}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  color: '#ef4444',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            {/* Question Input */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(100, 255, 218, 0.1)' }}>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <input
+                  type="text"
+                  value={qaQuestion}
+                  onChange={(e) => setQaQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && qaQuestion.trim() && !qaLoading) {
+                      vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                    }
+                  }}
+                  placeholder="E.g., What does the UserService class do? How is authentication handled?"
+                  style={{
+                    flex: 1,
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(236, 72, 153, 0.3)',
+                    background: 'rgba(15, 23, 42, 0.8)',
+                    color: '#e2e8f0',
+                    fontSize: '15px',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (qaQuestion.trim() && !qaLoading) {
+                      vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                    }
+                  }}
+                  disabled={!qaQuestion.trim() || qaLoading}
+                  style={{
+                    padding: '14px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: qaQuestion.trim() && !qaLoading
+                      ? 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)'
+                      : 'rgba(100, 116, 139, 0.3)',
+                    color: qaQuestion.trim() && !qaLoading ? '#fff' : '#64748b',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: qaQuestion.trim() && !qaLoading ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  {qaLoading ? (
+                    <>
+                      <span style={{
+                        width: '16px',
+                        height: '16px',
+                        border: '2px solid rgba(255,255,255,0.3)',
+                        borderTop: '2px solid #fff',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                      }} />
+                      Searching...
+                    </>
+                  ) : (
+                    <>🔍 Ask</>
+                  )}
+                </button>
+              </div>
+
+              {/* Quick Questions */}
+              <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ color: '#64748b', fontSize: '12px', marginRight: '4px' }}>Try:</span>
+                {[
+                  'What are the main components?',
+                  'How does the API work?',
+                  'List all services',
+                  'Where is authentication?',
+                ].map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setQaQuestion(q);
+                      vscode.postMessage({ command: 'askQuestion', question: q });
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '16px',
+                      border: '1px solid rgba(236, 72, 153, 0.2)',
+                      background: 'rgba(236, 72, 153, 0.05)',
+                      color: '#f472b6',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Answer Area */}
+            <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+              {qaAnswer ? (
+                <div>
+                  {/* Confidence Badge */}
+                  <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      background: qaAnswer.confidence === 'high'
+                        ? 'rgba(16, 185, 129, 0.2)'
+                        : qaAnswer.confidence === 'medium'
+                          ? 'rgba(245, 158, 11, 0.2)'
+                          : 'rgba(239, 68, 68, 0.2)',
+                      color: qaAnswer.confidence === 'high'
+                        ? '#10b981'
+                        : qaAnswer.confidence === 'medium'
+                          ? '#f59e0b'
+                          : '#ef4444',
+                    }}>
+                      {qaAnswer.confidence === 'high' ? '✓ High Confidence' :
+                        qaAnswer.confidence === 'medium' ? '~ Medium Confidence' :
+                          '? Low Confidence'}
+                    </span>
+                  </div>
+
+                  {/* Answer */}
+                  <div
+                    className="markdown-content"
+                    style={{
+                      background: 'rgba(15, 23, 42, 0.6)',
+                      padding: '20px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(100, 255, 218, 0.1)',
+                      marginBottom: '20px',
+                    }}
+                    dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
+                  />
+
+                  {/* Relevant Nodes */}
+                  {qaAnswer.relevantNodes.length > 0 && (
+                    <div>
+                      <h4 style={{ color: '#f472b6', margin: '0 0 12px 0', fontSize: '14px' }}>
+                        📍 Relevant Code Locations
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {qaAnswer.relevantNodes.slice(0, 5).map((node, i) => (
+                          <div
+                            key={i}
+                            onClick={() => {
+                              // Find and highlight node in graph
+                              const graphNode = graphData?.nodes.find(n => n.label === node.name);
+                              if (graphNode) {
+                                setPopupData({
+                                  nodeId: graphNode.id,
+                                  label: graphNode.label,
+                                  type: graphNode.type,
+                                  filePath: graphNode.filePath,
+                                  description: graphNode.description,
+                                  parentId: graphNode.parentId,
+                                  metadata: graphNode.metadata,
+                                });
+                                vscode.postMessage({ command: 'getNodeDetails', nodeId: graphNode.id });
+                                setShowQAPanel(false);
+                              }
+                            }}
+                            style={{
+                              padding: '12px 16px',
+                              borderRadius: '8px',
+                              background: 'rgba(30, 41, 59, 0.8)',
+                              border: '1px solid rgba(100, 255, 218, 0.1)',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ color: '#64ffda', fontWeight: 600 }}>{node.name}</span>
+                              <span style={{
+                                fontSize: '11px',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: 'rgba(100, 255, 218, 0.1)',
+                                color: '#64ffda',
+                              }}>
+                                {node.type}
+                              </span>
+                            </div>
+                            {node.filePath && (
+                              <div style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                                📁 {node.filePath}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  color: '#64748b',
+                  padding: '60px 20px',
+                }}>
+                  <div style={{ fontSize: '48px', marginBottom: '16px' }}>🤔</div>
+                  <p style={{ margin: 0, fontSize: '16px' }}>
+                    Ask a question to search through your codebase
+                  </p>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '13px', color: '#475569' }}>
+                    The RAG system will find relevant code and provide context-aware answers
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* History */}
+            {qaHistory.length > 0 && (
+              <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid rgba(100, 255, 218, 0.1)',
+                background: 'rgba(15, 23, 42, 0.5)',
+              }}>
+                <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '8px' }}>
+                  Recent Questions ({qaHistory.length})
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {qaHistory.slice(-5).reverse().map((h, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setQaQuestion(h.question);
+                        vscode.postMessage({ command: 'askQuestion', question: h.question });
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        border: '1px solid rgba(100, 255, 218, 0.2)',
+                        background: 'rgba(100, 255, 218, 0.05)',
+                        color: '#94a3b8',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        maxWidth: '200px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={h.question}
+                    >
+                      {h.question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Global Styles */}

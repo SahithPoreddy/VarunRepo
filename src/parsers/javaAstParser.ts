@@ -92,7 +92,31 @@ export class JavaAstParser {
     'Autowired', 'Inject', 'Resource', 'Value', 'Qualifier'
   ];
 
+  // Track if file contains main method (for entry point detection)
+  private hasMainMethod: boolean = false;
+  private mainMethodClassName: string = '';
+
+  /**
+   * Check if a method is a Java main method
+   * Matches: public static void main(String[] args), String... args, etc.
+   */
+  private isMainMethod(methodName: string, modifiers: { isStatic?: boolean; visibility?: string }, returnType: string, parameters?: Parameter[]): boolean {
+    if (methodName !== 'main') return false;
+    if (!modifiers.isStatic) return false;
+    if (modifiers.visibility !== 'public') return false;
+    if (returnType !== 'void') return false;
+    
+    // Check for String[] or String... parameter
+    if (!parameters || parameters.length !== 1) return false;
+    const param = parameters[0];
+    const paramType = (param.type || '').replace(/\s+/g, '');
+    return paramType === 'String[]' || paramType === 'String...' || paramType.includes('String[]') || paramType.includes('String...');
+  }
+
   async parse(fileUri: vscode.Uri, isEntryPoint: boolean = false): Promise<ParseResult> {
+    // Reset main method tracking for each file
+    this.hasMainMethod = false;
+    this.mainMethodClassName = '';
     const document = await vscode.workspace.openTextDocument(fileUri);
     this.content = document.getText();
     this.lines = this.content.split('\n');
@@ -502,6 +526,13 @@ export class JavaAstParser {
 
     const methodId = `${parentId}:method:${methodName}:${startLine}`;
 
+    // Check if this is a main method - mark the containing class as entry point
+    if (this.isMainMethod(methodName, modifiers, returnType, parameters)) {
+      console.log(`Java main method detected in class: ${className}`);
+      this.hasMainMethod = true;
+      this.mainMethodClassName = className;
+    }
+
     return {
       id: methodId,
       name: methodName,
@@ -903,19 +934,56 @@ export class JavaAstParser {
     const importPattern = /^import\s+(static\s+)?([^;]+);/gm;
     let match;
 
+    // Get all class/interface/enum nodes in this file to connect imports FROM them
+    const localClassNodes = nodes.filter(n => 
+      n.type === 'class' || n.type === 'interface' || n.type === 'enum'
+    );
+
+    // If no classes found, use the file path as source (fallback)
+    const sourceNodes = localClassNodes.length > 0 ? localClassNodes : null;
+
     while ((match = importPattern.exec(this.content)) !== null) {
       const isStatic = !!match[1];
       const importPath = match[2].trim();
       const importedClass = importPath.split('.').pop() || importPath;
 
-      const targetId = classMap.get(importedClass) || `import:${importPath}`;
+      // Skip standard library imports (java.*, javax.*, etc.) unless they're in our codebase
+      if (importPath.startsWith('java.') || importPath.startsWith('javax.') || 
+          importPath.startsWith('org.springframework.') || importPath.startsWith('lombok.')) {
+        continue;
+      }
 
-      edges.push({
-        from: this.filePath,
-        to: targetId,
-        type: 'imports',
-        label: isStatic ? 'static import' : 'import'
-      });
+      // Check if the imported class exists in our classMap (same file or already parsed)
+      const targetId = classMap.get(importedClass);
+      
+      if (targetId) {
+        // Connect each local class to the imported class
+        if (sourceNodes) {
+          for (const sourceNode of sourceNodes) {
+            // Don't create self-referencing edges
+            if (sourceNode.id !== targetId) {
+              edges.push({
+                from: sourceNode.id,
+                to: targetId,
+                type: 'imports',
+                label: isStatic ? `static import ${importedClass}` : `imports ${importedClass}`
+              });
+            }
+          }
+        }
+      } else {
+        // External import - create edge to external node for potential cross-file linking
+        if (sourceNodes) {
+          for (const sourceNode of sourceNodes) {
+            edges.push({
+              from: sourceNode.id,
+              to: `external:${importedClass}`,
+              type: 'imports',
+              label: isStatic ? `static import ${importedClass}` : `imports ${importedClass}`
+            });
+          }
+        }
+      }
     }
   }
 
@@ -957,6 +1025,16 @@ export class JavaAstParser {
       description += description ? ` [${element.layer}]` : `[${element.layer}]`;
     }
 
+    // Check if this class is an entry point (contains main method or has SpringBootApplication)
+    const isEntryPoint = (element.type === 'class' && 
+      (element.name === this.mainMethodClassName || 
+       element.layer === 'application' ||
+       element.annotations?.some(a => a.includes('SpringBootApplication')))) || false;
+
+    if (isEntryPoint) {
+      console.log(`Marking ${element.name} as Java entry point`);
+    }
+
     return {
       id: element.id,
       label: element.name,
@@ -968,6 +1046,7 @@ export class JavaAstParser {
       parentId: element.parentId,
       visibility: element.visibility,
       isStatic: element.isStatic,
+      isEntryPoint,
       parameters: element.parameters,
       returnType: element.returnType,
       sourceCode,

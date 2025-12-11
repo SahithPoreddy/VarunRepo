@@ -99,6 +99,10 @@ export class VisualizationPanelReact {
         await this.handleSendToCline(message.nodeId, message.query);
         break;
       
+      case 'askQuestion':
+        await this.handleAskQuestion(message.question);
+        break;
+      
       case 'changePersona':
         await this.changePersona(message.persona);
         break;
@@ -296,6 +300,13 @@ export class VisualizationPanelReact {
       );
       
       if (result.nodesAdded > 0 || result.nodesModified > 0 || result.nodesRemoved > 0) {
+        // IMPORTANT: Get the updated graph from the updater and update currentAnalysis
+        const updatedGraph = updater.getCurrentGraph();
+        if (updatedGraph && this.currentAnalysis) {
+          this.currentAnalysis.graph = updatedGraph;
+          console.log(`Updated graph now has ${updatedGraph.nodes.length} nodes and ${updatedGraph.edges.length} edges`);
+        }
+        
         // Send updated graph to webview
         this.sendGraphData();
         
@@ -634,6 +645,48 @@ export class VisualizationPanelReact {
       );
     } else {
       vscode.window.showErrorMessage(result.error || 'Failed to send to Cline');
+    }
+  }
+
+  /**
+   * Handle Q&A questions from the webview
+   */
+  private async handleAskQuestion(question: string) {
+    if (!this.ragService) {
+      this.panel?.webview.postMessage({
+        type: 'questionAnswer',
+        answer: 'RAG service is not available. Please analyze the workspace first.',
+        relevantNodes: [],
+        confidence: 'low'
+      });
+      return;
+    }
+
+    try {
+      // Show loading state
+      this.panel?.webview.postMessage({
+        type: 'questionLoading',
+        loading: true
+      });
+
+      // Get answer from RAG service
+      const result = await this.ragService.answerQuestion(question);
+
+      // Send answer back to webview
+      this.panel?.webview.postMessage({
+        type: 'questionAnswer',
+        answer: result.answer,
+        relevantNodes: result.relevantNodes,
+        confidence: result.confidence
+      });
+    } catch (error) {
+      console.error('Error answering question:', error);
+      this.panel?.webview.postMessage({
+        type: 'questionAnswer',
+        answer: 'An error occurred while searching. Please try again.',
+        relevantNodes: [],
+        confidence: 'low'
+      });
     }
   }
 

@@ -45,6 +45,72 @@ export class IncrementalGraphUpdater {
     this.workspaceRoot = workspaceRoot;
     await this.hashCache.initialize(workspaceRoot);
     this.currentGraph = existingGraph || null;
+
+    // Populate hash cache from existing graph for files that still exist
+    // This is needed for proper change detection
+    if (existingGraph && existingGraph.nodes.length > 0) {
+      await this.populateHashCacheFromGraph(existingGraph);
+    }
+  }
+
+  /**
+   * Populate hash cache from an existing graph
+   * Only adds files that exist on disk (for hash calculation)
+   */
+  private async populateHashCacheFromGraph(graph: CodeGraph): Promise<void> {
+    const fs = await import('fs');
+    
+    // Get unique file paths from the graph
+    const filePaths = new Set<string>();
+    for (const node of graph.nodes) {
+      if (node.filePath) {
+        filePaths.add(node.filePath);
+      }
+    }
+
+    let addedCount = 0;
+    for (const filePath of filePaths) {
+      // Only add to cache if file exists AND not already cached
+      if (fs.existsSync(filePath) && !this.hashCache.hasEntry(filePath)) {
+        const nodeIds = graph.nodes
+          .filter(n => n.filePath === filePath)
+          .map(n => n.id);
+        this.hashCache.updateEntry(filePath, nodeIds);
+        addedCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      await this.hashCache.saveCache();
+      console.log(`Added ${addedCount} files to hash cache`);
+    }
+  }
+
+  /**
+   * Detect files that exist in the graph but have been deleted from disk
+   */
+  private detectDeletedFilesFromGraph(): string[] {
+    if (!this.currentGraph) return [];
+    
+    const fs = require('fs');
+    const deletedFiles: string[] = [];
+    
+    // Get unique file paths from the current graph
+    const graphFilePaths = new Set<string>();
+    for (const node of this.currentGraph.nodes) {
+      if (node.filePath) {
+        graphFilePaths.add(node.filePath);
+      }
+    }
+
+    // Check which files no longer exist on disk
+    for (const filePath of graphFilePaths) {
+      if (!fs.existsSync(filePath)) {
+        deletedFiles.push(filePath);
+      }
+    }
+
+    return deletedFiles;
   }
 
   /**
@@ -76,11 +142,36 @@ export class IncrementalGraphUpdater {
     try {
       onProgress?.('Detecting changes...', 0);
 
+      // ALWAYS use the provided graph as the current state
+      // This ensures we're working with the latest graph from the visualization panel
+      this.currentGraph = fullAnalysisResult.graph;
+      console.log(`Initialized with graph: ${this.currentGraph.nodes.length} nodes, ${this.currentGraph.edges.length} edges`);
+
       // Get all current source files
       const allFiles = await this.getAllSourceFiles();
       
-      // Detect changes
+      // Detect changes from hash cache (for modified/added files)
       const changes = await this.hashCache.detectChanges(allFiles);
+      
+      // ALSO detect deleted files by comparing graph nodes to disk
+      // This catches files that were never in the hash cache
+      const deletedFromGraph = this.detectDeletedFilesFromGraph();
+      
+      // Merge deleted files (avoid duplicates)
+      const allDeleted = new Set([...changes.deleted, ...deletedFromGraph]);
+      changes.deleted = Array.from(allDeleted);
+      changes.changedCount = changes.added.length + changes.modified.length + changes.deleted.length;
+      
+      console.log(`Change detection results: ${changes.added.length} added, ${changes.modified.length} modified, ${changes.deleted.length} deleted, ${changes.unchanged.length} unchanged`);
+      if (changes.added.length > 0) {
+        console.log(`Added files: ${changes.added.join(', ')}`);
+      }
+      if (changes.deleted.length > 0) {
+        console.log(`Deleted files: ${changes.deleted.join(', ')}`);
+      }
+      if (changes.modified.length > 0) {
+        console.log(`Modified files: ${changes.modified.join(', ')}`);
+      }
       
       if (changes.changedCount === 0) {
         return {
@@ -97,11 +188,6 @@ export class IncrementalGraphUpdater {
 
       onProgress?.(`Processing ${changes.changedCount} changed files...`, 10);
 
-      // Initialize the current graph if not set
-      if (!this.currentGraph) {
-        this.currentGraph = fullAnalysisResult.graph;
-      }
-
       let nodesAdded = 0;
       let nodesModified = 0;
       let nodesRemoved = 0;
@@ -109,17 +195,26 @@ export class IncrementalGraphUpdater {
 
       // Process deleted files
       onProgress?.('Removing deleted nodes...', 20);
+      if (changes.deleted.length > 0) {
+        console.log(`Detected ${changes.deleted.length} deleted files: ${changes.deleted.join(', ')}`);
+      }
       for (const deletedFile of changes.deleted) {
         const removedNodeIds = this.hashCache.removeEntry(deletedFile);
+        console.log(`Removing nodes for deleted file ${deletedFile}: ${removedNodeIds.join(', ')}`);
         nodesRemoved += this.removeNodesForFile(deletedFile, removedNodeIds);
       }
 
       // Process added files - RE-ANALYZE each new file
       onProgress?.('Analyzing new files...', 40);
+      if (changes.added.length > 0) {
+        console.log(`Detected ${changes.added.length} added files: ${changes.added.join(', ')}`);
+      }
       for (const addedFile of changes.added) {
         try {
           const fileUri = vscode.Uri.file(addedFile);
           const newNodes = await this.workspaceAnalyzer.analyzeFile(fileUri);
+          console.log(`Parsed added file ${addedFile}: found ${newNodes.length} nodes`);
+          newNodes.forEach(n => console.log(`  - ${n.type}: ${n.label} (${n.id})`));
           nodesAdded += this.addNodes(newNodes);
           this.hashCache.updateEntry(addedFile, newNodes.map(n => n.id));
         } catch (error) {
@@ -133,6 +228,8 @@ export class IncrementalGraphUpdater {
         try {
           const fileUri = vscode.Uri.file(modifiedFile);
           const updatedNodes = await this.workspaceAnalyzer.analyzeFile(fileUri);
+          console.log(`Parsed ${modifiedFile}: found ${updatedNodes.length} nodes`);
+          updatedNodes.forEach(n => console.log(`  - ${n.type}: ${n.label} (${n.id})`));
           nodesModified += this.updateNodes(modifiedFile, updatedNodes);
           this.hashCache.updateEntry(modifiedFile, updatedNodes.map(n => n.id));
         } catch (error) {
@@ -216,20 +313,25 @@ export class IncrementalGraphUpdater {
   private removeNodesForFile(filePath: string, nodeIds: string[]): number {
     if (!this.currentGraph) return 0;
 
-    const nodeIdSet = new Set(nodeIds);
+    // Get ALL node IDs for this file (in case nodeIds from cache is incomplete)
+    const nodesInFile = this.currentGraph.nodes.filter(n => n.filePath === filePath);
+    const allNodeIds = new Set([...nodeIds, ...nodesInFile.map(n => n.id)]);
+    
     const originalCount = this.currentGraph.nodes.length;
 
-    // Remove nodes
+    // Remove nodes by file path (most reliable)
     this.currentGraph.nodes = this.currentGraph.nodes.filter(
-      node => !nodeIdSet.has(node.id) && node.filePath !== filePath
+      node => node.filePath !== filePath
     );
 
-    // Remove associated edges
+    // Remove associated edges (using all node IDs we found)
     this.currentGraph.edges = this.currentGraph.edges.filter(
-      edge => !nodeIdSet.has(edge.from) && !nodeIdSet.has(edge.to)
+      edge => !allNodeIds.has(edge.from) && !allNodeIds.has(edge.to)
     );
 
-    return originalCount - this.currentGraph.nodes.length;
+    const removedCount = originalCount - this.currentGraph.nodes.length;
+    console.log(`Removed ${removedCount} nodes for deleted file: ${filePath}`);
+    return removedCount;
   }
 
   /**
@@ -242,7 +344,41 @@ export class IncrementalGraphUpdater {
     const existingIds = new Set(this.currentGraph.nodes.map(n => n.id));
     const newNodes = nodes.filter(n => !existingIds.has(n.id));
 
+    if (newNodes.length === 0) {
+      console.log('No new nodes to add (all duplicates)');
+      return 0;
+    }
+
     this.currentGraph.nodes.push(...newNodes);
+    console.log(`Added ${newNodes.length} new nodes to graph`);
+
+    // IMPORTANT: Create parent-child 'contains' edges for the new nodes
+    const newNodeIds = new Set(newNodes.map(n => n.id));
+    let edgesCreated = 0;
+    for (const node of newNodes) {
+      if (node.parentId) {
+        // Check if parent exists (either in new nodes or existing graph)
+        const parentExists = newNodeIds.has(node.parentId) || 
+                            this.currentGraph.nodes.some(n => n.id === node.parentId);
+        if (parentExists) {
+          const edgeExists = this.currentGraph.edges.some(
+            e => e.from === node.parentId && e.to === node.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            this.currentGraph.edges.push({
+              from: node.parentId,
+              to: node.id,
+              type: 'contains'
+            });
+            edgesCreated++;
+          }
+        }
+      }
+    }
+    if (edgesCreated > 0) {
+      console.log(`Created ${edgesCreated} parent-child edges for new nodes`);
+    }
+
     return newNodes.length;
   }
 
@@ -256,15 +392,40 @@ export class IncrementalGraphUpdater {
     const oldNodes = this.currentGraph.nodes.filter(n => n.filePath === filePath);
     const oldNodeIds = new Set(oldNodes.map(n => n.id));
     
+    console.log(`Updating file ${filePath}: removing ${oldNodes.length} old nodes, adding ${updatedNodes.length} new nodes`);
+    console.log(`Old node IDs: ${Array.from(oldNodeIds).join(', ')}`);
+    console.log(`New node IDs: ${updatedNodes.map(n => n.id).join(', ')}`);
+    
     this.currentGraph.nodes = this.currentGraph.nodes.filter(n => n.filePath !== filePath);
 
     // Add updated nodes
     this.currentGraph.nodes.push(...updatedNodes);
 
-    // Remove old edges for these nodes
+    // Remove old edges that reference removed nodes
+    const oldEdgeCount = this.currentGraph.edges.length;
     this.currentGraph.edges = this.currentGraph.edges.filter(
       edge => !oldNodeIds.has(edge.from) && !oldNodeIds.has(edge.to)
     );
+    console.log(`Removed ${oldEdgeCount - this.currentGraph.edges.length} old edges`);
+
+    // IMPORTANT: Rebuild parent-child 'contains' edges for the updated nodes
+    const newNodeIds = new Set(updatedNodes.map(n => n.id));
+    for (const node of updatedNodes) {
+      if (node.parentId && newNodeIds.has(node.parentId)) {
+        // Add contains edge from parent to child
+        const edgeExists = this.currentGraph.edges.some(
+          e => e.from === node.parentId && e.to === node.id && e.type === 'contains'
+        );
+        if (!edgeExists) {
+          this.currentGraph.edges.push({
+            from: node.parentId,
+            to: node.id,
+            type: 'contains'
+          });
+          console.log(`Added contains edge: ${node.parentId} -> ${node.id}`);
+        }
+      }
+    }
 
     return updatedNodes.length;
   }

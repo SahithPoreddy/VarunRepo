@@ -248,6 +248,135 @@ export class RAGService {
   }
 
   /**
+   * Answer a question about the project using RAG search
+   * Returns relevant context and a synthesized answer
+   */
+  async answerQuestion(question: string): Promise<{
+    answer: string;
+    relevantNodes: Array<{
+      name: string;
+      type: string;
+      summary: string;
+      filePath: string;
+      score: number;
+    }>;
+    confidence: 'high' | 'medium' | 'low';
+  }> {
+    if (!this.isInitialized) {
+      return {
+        answer: 'RAG service is not initialized. Please analyze the workspace first.',
+        relevantNodes: [],
+        confidence: 'low'
+      };
+    }
+
+    // Search for relevant documents
+    const results = await this.search(question, 8);
+    
+    if (results.length === 0) {
+      return {
+        answer: 'No relevant information found in the codebase. Try rephrasing your question or use more specific terms.',
+        relevantNodes: [],
+        confidence: 'low'
+      };
+    }
+
+    // Build relevant nodes list
+    const relevantNodes = results.map(r => ({
+      name: r.metadata.name || r.id,
+      type: r.metadata.type || 'unknown',
+      summary: r.metadata.summary || r.content.substring(0, 200),
+      filePath: r.metadata.filePath || '',
+      score: r.score
+    }));
+
+    // Synthesize an answer based on the results
+    const topScore = results[0].score;
+    const confidence: 'high' | 'medium' | 'low' = 
+      topScore > 1.0 ? 'high' : 
+      topScore > 0.5 ? 'medium' : 'low';
+
+    // Build answer from top results
+    let answer = this.synthesizeAnswer(question, results);
+
+    return {
+      answer,
+      relevantNodes,
+      confidence
+    };
+  }
+
+  /**
+   * Synthesize a human-readable answer from search results
+   */
+  private synthesizeAnswer(question: string, results: SearchResult[]): string {
+    const questionLower = question.toLowerCase();
+    
+    // Detect question type
+    const isWhatQuestion = questionLower.startsWith('what') || questionLower.includes('what is') || questionLower.includes('what does');
+    const isHowQuestion = questionLower.startsWith('how') || questionLower.includes('how to') || questionLower.includes('how does');
+    const isWhereQuestion = questionLower.startsWith('where') || questionLower.includes('where is');
+    const isWhyQuestion = questionLower.startsWith('why');
+    const isListQuestion = questionLower.includes('list') || questionLower.includes('all') || questionLower.includes('show me');
+
+    const topResults = results.slice(0, 5);
+    
+    if (isListQuestion) {
+      // List relevant components
+      const items = topResults.map(r => 
+        `• **${r.metadata.name || r.id}** (${r.metadata.type || 'unknown'}): ${r.metadata.summary || r.content.substring(0, 100)}`
+      );
+      return `Found ${results.length} relevant items:\n\n${items.join('\n\n')}`;
+    }
+
+    if (isWhereQuestion) {
+      // Location-focused answer
+      const locations = topResults.map(r => 
+        `• **${r.metadata.name || r.id}** is in \`${r.metadata.filePath || 'unknown location'}\``
+      );
+      return `Here's where you can find relevant code:\n\n${locations.join('\n')}`;
+    }
+
+    if (isHowQuestion) {
+      // Process/implementation focused
+      const top = topResults[0];
+      let answer = `Based on the codebase analysis:\n\n`;
+      answer += `**${top.metadata.name || top.id}** (${top.metadata.type || 'unknown'})\n\n`;
+      answer += top.metadata.summary || top.content.substring(0, 300);
+      
+      if (topResults.length > 1) {
+        answer += `\n\n**Related components:**\n`;
+        topResults.slice(1, 4).forEach(r => {
+          answer += `• ${r.metadata.name || r.id}: ${(r.metadata.summary || r.content).substring(0, 100)}...\n`;
+        });
+      }
+      return answer;
+    }
+
+    // Default: What/general question
+    const top = topResults[0];
+    let answer = `**${top.metadata.name || top.id}**`;
+    if (top.metadata.type) answer += ` (${top.metadata.type})`;
+    answer += `\n\n`;
+    answer += top.metadata.summary || top.content.substring(0, 400);
+    
+    if (top.metadata.filePath) {
+      answer += `\n\n📁 Location: \`${top.metadata.filePath}\``;
+    }
+
+    if (topResults.length > 1) {
+      answer += `\n\n**See also:**\n`;
+      topResults.slice(1, 4).forEach(r => {
+        answer += `• ${r.metadata.name || r.id}`;
+        if (r.metadata.filePath) answer += ` (\`${r.metadata.filePath}\`)`;
+        answer += `\n`;
+      });
+    }
+
+    return answer;
+  }
+
+  /**
    * Clear all indexed documents
    */
   async clearIndex(): Promise<void> {

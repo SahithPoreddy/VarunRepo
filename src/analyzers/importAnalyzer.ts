@@ -123,7 +123,7 @@ export class ImportAnalyzer {
     while ((match = importPattern.exec(content)) !== null) {
       const fullImport = match[2];
       const className = fullImport.split('.').pop() || fullImport;
-      
+
       imports.push({
         source: fullImport,
         specifiers: [className],
@@ -144,17 +144,30 @@ export class ImportAnalyzer {
     importSource: string,
     workspaceRoot: string
   ): Promise<string | null> {
+    // Handle Java package imports (e.g., com.example.service.UserService)
+    if (sourceFile.endsWith('.java')) {
+      return this.resolveJavaImportPath(importSource, workspaceRoot);
+    }
+
     // Skip node_modules and external packages
-    if (!importSource.startsWith('.') && !importSource.startsWith('/')) {
+    // BUT allow common aliases like @/ (src alias)
+    if (!importSource.startsWith('.') && !importSource.startsWith('/') && !importSource.startsWith('@/')) {
       return null; // External package
     }
 
     const sourceDir = path.dirname(sourceFile);
-    let resolvedPath = path.resolve(sourceDir, importSource);
+    let resolvedPath = '';
+
+    // Handle @/ alias -> src/
+    if (importSource.startsWith('@/')) {
+      resolvedPath = path.join(workspaceRoot, 'src', importSource.substring(2));
+    } else {
+      resolvedPath = path.resolve(sourceDir, importSource);
+    }
 
     // Try common extensions
     const extensions = ['.ts', '.tsx', '.js', '.jsx', '.java', '/index.ts', '/index.tsx', '/index.js', '/index.jsx'];
-    
+
     for (const ext of extensions) {
       const testPath = resolvedPath + ext;
       if (await this.fileExists(testPath)) {
@@ -215,5 +228,69 @@ export class ImportAnalyzer {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Resolve Java package import to actual file path
+   * e.g., com.example.service.UserService -> src/main/java/com/example/service/UserService.java
+   */
+  private async resolveJavaImportPath(
+    importSource: string,
+    workspaceRoot: string
+  ): Promise<string | null> {
+    // Skip standard library and framework imports
+    if (importSource.startsWith('java.') || 
+        importSource.startsWith('javax.') ||
+        importSource.startsWith('org.springframework.') ||
+        importSource.startsWith('lombok.') ||
+        importSource.startsWith('org.junit.') ||
+        importSource.startsWith('org.mockito.') ||
+        importSource.startsWith('org.slf4j.') ||
+        importSource.startsWith('org.apache.')) {
+      return null;
+    }
+
+    // Convert package path to file path (com.example.Class -> com/example/Class.java)
+    const classPath = importSource.replace(/\./g, '/');
+    
+    // Handle wildcard imports (com.example.*)
+    if (classPath.endsWith('/*')) {
+      return null; // Can't resolve wildcard imports to a single file
+    }
+
+    // Common Java source directories to search
+    const srcDirs = [
+      'src/main/java',
+      'src',
+      'app/src/main/java',  // Android
+      'main/java',
+      ''  // Root level
+    ];
+
+    for (const srcDir of srcDirs) {
+      const fullPath = path.join(workspaceRoot, srcDir, classPath + '.java');
+      if (await this.fileExists(fullPath)) {
+        return fullPath;
+      }
+    }
+
+    // Try to find the file anywhere in the workspace using glob
+    try {
+      const className = importSource.split('.').pop();
+      if (className) {
+        const files = await vscode.workspace.findFiles(
+          `**/${className}.java`,
+          '**/node_modules/**',
+          1
+        );
+        if (files.length > 0) {
+          return files[0].fsPath;
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to search for Java class ${importSource}:`, error);
+    }
+
+    return null;
   }
 }

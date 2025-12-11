@@ -195,13 +195,20 @@ export class EntryPointDetector {
     );
 
     for (const file of javaFiles) {
+      // Check for main method OR Spring Boot annotation
       const hasMain = await this.hasMainMethod(file);
-      if (hasMain) {
+      const hasSpringBoot = await this.hasSpringBootAnnotation(file);
+      
+      if (hasMain || hasSpringBoot) {
         entryPoints.push({
           filePath: file.fsPath,
           type: 'main',
-          score: 10
+          score: hasSpringBoot ? 15 : 10 // Spring Boot gets higher priority
         });
+        
+        if (hasSpringBoot) {
+          console.log(`Spring Boot entry point detected: ${file.fsPath}`);
+        }
       }
     }
 
@@ -244,9 +251,40 @@ export class EntryPointDetector {
       const document = await vscode.workspace.openTextDocument(fileUri);
       const content = document.getText();
       
-      // Check for main method signature
-      const mainMethodPattern = /public\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s+\w+\s*\)/;
-      return mainMethodPattern.test(content);
+      // Check for main method signature - multiple patterns to catch all variants:
+      // - public static void main(String[] args)
+      // - public static void main(String []args)
+      // - public static void main(String args[])
+      // - public static void main(String... args)
+      // - public static void main(String[] )
+      const mainMethodPatterns = [
+        /public\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s*\w*\s*\)/,  // String[] args or String[] 
+        /public\s+static\s+void\s+main\s*\(\s*String\s+\w*\s*\[\s*\]\s*\)/,  // String args[]
+        /public\s+static\s+void\s+main\s*\(\s*String\s*\.\.\.\s*\w*\s*\)/,   // String... args (varargs)
+      ];
+      
+      return mainMethodPatterns.some(pattern => pattern.test(content));
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Check if file contains Spring Boot @SpringBootApplication annotation
+   * This is the standard entry point for Spring Boot applications
+   */
+  private async hasSpringBootAnnotation(fileUri: vscode.Uri): Promise<boolean> {
+    try {
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      const content = document.getText();
+      
+      // Check for Spring Boot entry point annotations
+      const springBootPatterns = [
+        /@SpringBootApplication/,
+        /@EnableAutoConfiguration/,
+      ];
+      
+      return springBootPatterns.some(pattern => pattern.test(content));
     } catch (error) {
       return false;
     }

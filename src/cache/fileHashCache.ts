@@ -251,6 +251,13 @@ export class FileHashCache {
   }
 
   /**
+   * Check if an entry exists for a file
+   */
+  hasEntry(filePath: string): boolean {
+    return this.hashCache.has(filePath);
+  }
+
+  /**
    * Get node IDs associated with a file
    */
   getNodeIds(filePath: string): string[] {

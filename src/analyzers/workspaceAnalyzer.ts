@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { CodeGraph, CodeNode, CodeEdge, AnalysisResult, AnalysisError } from '../types/types';
-import { JavaParser } from '../parsers/javaParser';
 import { JavaAstParser } from '../parsers/javaAstParser';
 import { ReactParser } from '../parsers/reactParser';
 import { PythonParser } from '../parsers/pythonParser';
@@ -11,7 +10,6 @@ import { ImportAnalyzer } from './importAnalyzer';
 import * as path from 'path';
 
 export class WorkspaceAnalyzer {
-  private javaParser: JavaParser;
   private javaAstParser: JavaAstParser;
   private reactParser: ReactParser;
   private pythonParser: PythonParser;
@@ -20,14 +18,13 @@ export class WorkspaceAnalyzer {
   private entryPointDetector: EntryPointDetector;
   private importAnalyzer: ImportAnalyzer;
   private useAstParsers: boolean = true; // Use AST parsers by default
-  
+
   // Prevent concurrent analysis
   private isAnalyzing: boolean = false;
   private lastAnalysisTime: number = 0;
   private static readonly MIN_ANALYSIS_INTERVAL = 2000; // 2 seconds minimum between analyses
 
   constructor() {
-    this.javaParser = new JavaParser();
     this.javaAstParser = new JavaAstParser();
     this.reactParser = new ReactParser();
     this.pythonParser = new PythonParser();
@@ -48,10 +45,10 @@ export class WorkspaceAnalyzer {
       console.log('Analysis requested too soon, skipping...');
       return this.createEmptyResult();
     }
-    
+
     this.isAnalyzing = true;
     this.lastAnalysisTime = now;
-    
+
     const errors: AnalysisError[] = [];
     const warnings: string[] = [];
     const allNodes: CodeNode[] = [];
@@ -72,7 +69,7 @@ export class WorkspaceAnalyzer {
         '**/*.java',
         '**/node_modules/**'
       );
-      
+
       const reactFiles = await vscode.workspace.findFiles(
         '**/*.{tsx,jsx,ts,js}',
         '**/node_modules/**'
@@ -87,13 +84,13 @@ export class WorkspaceAnalyzer {
 
       // Step 3: Build dependency map from imports
       const dependencyMap = new Map<string, string[]>();
-      
+
       for (const file of [...javaFiles, ...reactFiles, ...pythonFiles]) {
         try {
           const deps = await this.importAnalyzer.buildDependencyMap(file, workspaceUri.fsPath);
           const targets = deps.map(d => d.targetFile);
           dependencyMap.set(file.fsPath, targets);
-          
+
           // Create import edges
           for (const dep of deps) {
             allEdges.push({
@@ -110,7 +107,7 @@ export class WorkspaceAnalyzer {
 
       // Step 4: Parse ALL files in the codebase (full scan)
       const filesToParse = new Set<string>();
-      
+
       // Always parse all files to ensure complete codebase coverage
       javaFiles.forEach(f => filesToParse.add(f.fsPath));
       reactFiles.forEach(f => filesToParse.add(f.fsPath));
@@ -126,16 +123,12 @@ export class WorkspaceAnalyzer {
         const fileUri = vscode.Uri.file(filePath);
         const ext = path.extname(filePath);
         const isEntryPointFile = entryPointPaths.has(filePath);
-        
+
         try {
           let result;
           if (ext === '.java') {
             // Use AST parser for Java (better for Spring Boot)
-            if (this.useAstParsers) {
-              result = await this.javaAstParser.parse(fileUri, isEntryPointFile);
-            } else {
-              result = await this.javaParser.parse(fileUri, isEntryPointFile);
-            }
+            result = await this.javaAstParser.parse(fileUri, isEntryPointFile);
           } else if (['.tsx', '.jsx', '.ts', '.js'].includes(ext)) {
             // Pass isEntryPoint flag to create module node for files like main.tsx
             result = await this.reactParser.parse(fileUri, isEntryPointFile);
@@ -149,7 +142,7 @@ export class WorkspaceAnalyzer {
           } else {
             continue;
           }
-          
+
           allNodes.push(...result.nodes);
           allEdges.push(...result.edges);
         } catch (error) {
@@ -162,22 +155,54 @@ export class WorkspaceAnalyzer {
       }
 
       // Step 6: Mark entry point nodes and primary entry
+      // Mark ALL top-level nodes (classes, modules, components) in entry point files
       for (const ep of entryPoints) {
-        const entryNode = allNodes.find(n => n.filePath === ep.filePath);
-        if (entryNode) {
+        // Find all top-level nodes in this entry point file
+        const entryNodes = allNodes.filter(n =>
+          n.filePath === ep.filePath &&
+          !n.parentId && // Only top-level nodes (no parent)
+          (n.type === 'class' || n.type === 'module' || n.type === 'component' || n.type === 'interface' || n.type === 'function')
+        );
+
+        // If no top-level nodes found, fall back to first node in file
+        if (entryNodes.length === 0) {
+          const firstNode = allNodes.find(n => n.filePath === ep.filePath);
+          if (firstNode) {
+            entryNodes.push(firstNode);
+          }
+        }
+
+        for (const entryNode of entryNodes) {
           entryNode.isEntryPoint = true;
           if (ep.isPrimaryEntry) {
             entryNode.isPrimaryEntry = true;
-            console.log(`Marked node as PRIMARY entry: ${entryNode.label}`);
+            console.log(`Marked node as PRIMARY entry: ${entryNode.label} (${entryNode.type})`);
+          } else {
+            console.log(`Marked node as entry point: ${entryNode.label} (${entryNode.type})`);
           }
         }
+      }
+
+      // Step 6.1: AST-Based Fallback for Spring Boot
+      // If regex detection missed it, check parsed nodes for @SpringBootApplication
+      const springBootNodes = allNodes.filter(n =>
+        n.language === 'java' &&
+        (n.documentation?.description?.includes('@SpringBootApplication') ||
+          n.documentation?.description?.includes('[@application]') ||
+          n.sourceCode.includes('@SpringBootApplication'))
+      );
+
+      for (const node of springBootNodes) {
+        node.isEntryPoint = true;
+        node.isPrimaryEntry = true;
+        console.log(`AST-detected Spring Boot Application: ${node.label}`);
       }
 
       // Step 6.5: Create hierarchical 'contains' edges from entry points to imported files
       // This creates the tree structure: Entry -> Components it uses
       const primaryEntryNode = allNodes.find(n => n.isPrimaryEntry);
       const entryNodes = allNodes.filter(n => n.isEntryPoint);
-      
+
       if (primaryEntryNode) {
         // Primary entry contains other entry points
         for (const entryNode of entryNodes) {
@@ -194,17 +219,17 @@ export class WorkspaceAnalyzer {
             }
           }
         }
-        
+
         // Primary entry also contains components from imported files
         const primaryDeps = dependencyMap.get(primaryEntryNode.filePath) || [];
         for (const depPath of primaryDeps) {
-          const componentsInDep = allNodes.filter(n => 
-            n.filePath === depPath && 
+          const componentsInDep = allNodes.filter(n =>
+            n.filePath === depPath &&
             (n.type === 'component' || n.type === 'class' || n.type === 'module')
           );
           for (const comp of componentsInDep) {
             // Avoid duplicate edges
-            const edgeExists = allEdges.some(e => 
+            const edgeExists = allEdges.some(e =>
               e.from === primaryEntryNode.id && e.to === comp.id && e.type === 'contains'
             );
             if (!edgeExists) {
@@ -221,20 +246,20 @@ export class WorkspaceAnalyzer {
 
       // Create contains edges for all import relationships
       for (const [filePath, deps] of dependencyMap.entries()) {
-        const sourceNodes = allNodes.filter(n => 
-          n.filePath === filePath && 
-          (n.type === 'component' || n.type === 'class' || n.type === 'module' || n.isEntryPoint)
+        const sourceNodes = allNodes.filter(n =>
+          n.filePath === filePath &&
+          (n.type === 'component' || n.type === 'class' || n.type === 'module' || n.isEntryPoint || n.type === 'function')
         );
-        
+
         for (const sourceNode of sourceNodes) {
           for (const depPath of deps) {
-            const targetNodes = allNodes.filter(n => 
-              n.filePath === depPath && 
-              (n.type === 'component' || n.type === 'class')
+            const targetNodes = allNodes.filter(n =>
+              n.filePath === depPath &&
+              (n.type === 'component' || n.type === 'class' || n.type === 'function' || n.type === 'module')
             );
-            
+
             for (const targetNode of targetNodes) {
-              const edgeExists = allEdges.some(e => 
+              const edgeExists = allEdges.some(e =>
                 e.from === sourceNode.id && e.to === targetNode.id && e.type === 'contains'
               );
               if (!edgeExists) {
@@ -249,15 +274,15 @@ export class WorkspaceAnalyzer {
           }
         }
       }
-      
+
       console.log(`Created ${allEdges.filter(e => e.type === 'contains').length} 'contains' edges for hierarchy`);
 
       // Step 7: Build the graph with entry points as roots
       // Pass only the primary entry point as the main root
       const primaryEntry = entryPoints.find(ep => ep.isPrimaryEntry);
       const graph = this.graphBuilder.buildFromEntryPoints(
-        allNodes, 
-        allEdges, 
+        allNodes,
+        allEdges,
         workspaceUri.fsPath,
         primaryEntry ? [primaryEntry.filePath] : entryPoints.map(ep => ep.filePath)
       );
@@ -274,7 +299,7 @@ export class WorkspaceAnalyzer {
         totalReactFiles: reactFiles.length,
         totalPythonFiles: pythonFiles.length
       };
-      
+
       console.log('Final analysis result:', finalResult);
 
       this.isAnalyzing = false;
@@ -295,7 +320,7 @@ export class WorkspaceAnalyzer {
       graph: {
         nodes: [],
         edges: [],
-        metadata: { 
+        metadata: {
           totalFiles: 0,
           totalNodes: 0,
           languages: [],
@@ -321,7 +346,7 @@ export class WorkspaceAnalyzer {
 
     collected.add(filePath);
     const dependencies = dependencyMap.get(filePath) || [];
-    
+
     for (const dep of dependencies) {
       this.collectDependencyTree(dep, dependencyMap, collected, depth + 1, maxDepth);
     }
@@ -329,15 +354,10 @@ export class WorkspaceAnalyzer {
 
   async analyzeFile(fileUri: vscode.Uri): Promise<CodeNode[]> {
     const ext = path.extname(fileUri.fsPath);
-    
+
     if (ext === '.java') {
-      if (this.useAstParsers) {
-        const result = await this.javaAstParser.parse(fileUri);
-        return result.nodes;
-      } else {
-        const result = await this.javaParser.parse(fileUri);
-        return result.nodes;
-      }
+      const result = await this.javaAstParser.parse(fileUri);
+      return result.nodes;
     } else if (['.tsx', '.jsx', '.ts', '.js'].includes(ext)) {
       const result = await this.reactParser.parse(fileUri);
       return result.nodes;
@@ -350,7 +370,7 @@ export class WorkspaceAnalyzer {
         return result.nodes;
       }
     }
-    
+
     return [];
   }
 }
