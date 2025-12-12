@@ -202,8 +202,7 @@ export class VisualizationPanelReact {
   }
 
   /**
-   * Handle View Docs with Persona - uses LLM to format existing data
-   * Much faster than regenerating docs from scratch
+   * Handle View Docs with Persona - generates full docs with LLM, saves to .doc_sync, indexes for RAG
    */
   private async handleViewDocsWithPersona(
     persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst',
@@ -220,7 +219,44 @@ export class VisualizationPanelReact {
         return;
       }
 
-      // Generate persona-specific documentation using LLM
+      // Generate full documentation with LLM and save to .doc_sync
+      if (this.currentAnalysis) {
+        const { CodebaseDocGenerator } = await import('../documentation/codebaseDocGenerator');
+        const docGenerator = new CodebaseDocGenerator();
+        
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+          vscode.window.showInformationMessage(`📝 Generating ${persona} documentation with AI...`);
+          
+          // Generate documentation with LLM (this saves to .doc_sync)
+          const documentation = await docGenerator.generateCodebaseDocs(
+            this.currentAnalysis,
+            workspaceFolders[0].uri,
+            true, // Use AI
+            persona
+          );
+          
+          // Index for RAG so Ask AI works
+          if (this.ragService) {
+            const ragChunks = docGenerator.generateRAGChunks(documentation);
+            await this.ragService.indexDocuments(ragChunks);
+            console.log('RAG indexed:', ragChunks.length, 'chunks');
+          } else {
+            // Initialize RAG if not available
+            const { RAGService } = await import('../rag/ragService');
+            this.ragService = new RAGService();
+            await this.ragService.initialize(workspaceFolders[0].uri);
+            const ragChunks = docGenerator.generateRAGChunks(documentation);
+            await this.ragService.indexDocuments(ragChunks);
+            console.log('RAG initialized and indexed:', ragChunks.length, 'chunks');
+          }
+          
+          // Load and send docs to webview
+          await this.loadAndSendDocs();
+        }
+      }
+
+      // Generate persona-specific overview using LLM
       const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
       
       this.panel?.webview.postMessage({
@@ -231,7 +267,7 @@ export class VisualizationPanelReact {
     } catch (error) {
       console.error('Failed to generate persona docs:', error);
       this.panel?.webview.postMessage({ command: 'personaDocsError' });
-      vscode.window.showErrorMessage('Failed to generate documentation. Please try again.');
+      vscode.window.showErrorMessage(`Failed to generate documentation: ${error}`);
     }
   }
 

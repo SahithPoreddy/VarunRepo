@@ -188,7 +188,7 @@ export class CodebaseDocGenerator {
     } else if (this.useLLM) {
       llmStatus = `🤖 Generating ${personaLabel} docs using LiteLLM`;
     } else {
-      llmStatus = `📝 Generating ${personaLabel} docs (rule-based)`;
+      llmStatus = `📝 Generating ${personaLabel} docs`;
     }
     vscode.window.showInformationMessage(llmStatus);
 
