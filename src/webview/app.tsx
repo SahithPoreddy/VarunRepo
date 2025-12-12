@@ -838,82 +838,85 @@ const DocsPanel = ({
       <div style={{
         position: 'fixed',
         top: 0,
-        left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 3000,
+        width: '520px',
+        background: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
+        borderLeft: '1px solid rgba(139, 92, 246, 0.2)',
+        zIndex: 2000,
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        animation: 'fadeIn 0.2s ease',
+        flexDirection: 'column',
+        boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.6)',
+        animation: 'slideInRight 0.3s ease',
       }}>
+        {/* Header */}
         <div style={{
-          width: '90%',
-          maxWidth: '900px',
-          maxHeight: '90vh',
-          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
-          borderRadius: '20px',
-          border: '1px solid rgba(100, 255, 218, 0.2)',
-          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6)',
+          padding: '20px 24px',
+          borderBottom: '1px solid rgba(139, 92, 246, 0.15)',
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'linear-gradient(180deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.02) 100%)',
         }}>
-          {/* Header */}
-          <div style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(100, 255, 218, 0.05)',
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(167, 139, 250, 0.3) 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px solid rgba(139, 92, 246, 0.3)',
+              fontSize: '22px',
+            }}>
+              📚
+            </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: '18px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                📚 {docsData?.projectName || 'Project'} Documentation
+              <h2 style={{ margin: 0, fontSize: '17px', color: '#f8fafc', fontWeight: 700 }}>
+                {docsData?.projectName || 'Project'} Docs
               </h2>
-              <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '12px' }}>
+              <p style={{ margin: '2px 0 0 0', color: '#a78bfa', fontSize: '12px' }}>
                 {personaDisplayNames[persona]} View
               </p>
             </div>
-            <button
-              onClick={onClose}
-              style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '8px',
-                width: '36px',
-                height: '36px',
-                cursor: 'pointer',
-                color: '#ef4444',
-                fontSize: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              ✕
-            </button>
           </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '10px',
+              width: '36px',
+              height: '36px',
+              cursor: 'pointer',
+              color: '#ef4444',
+              fontSize: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            ✕
+          </button>
+        </div>
 
-          {/* Content */}
-          <div style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '24px 32px',
-          }}>
-            <div
-              className="markdown-content"
-              style={{
-                color: '#e2e8f0',
-                fontSize: '14px',
-                lineHeight: 1.8,
-              }}
-              dangerouslySetInnerHTML={{ __html: marked(personaFormattedDocs) as string }}
-            />
-          </div>
+        {/* Content */}
+        <div style={{
+          flex: 1,
+          overflow: 'auto',
+          padding: '20px 24px',
+        }}>
+          <div
+            className="markdown-content"
+            style={{
+              color: '#e2e8f0',
+              fontSize: '14px',
+              lineHeight: 1.8,
+            }}
+            dangerouslySetInnerHTML={{ __html: marked(personaFormattedDocs) as string }}
+          />
         </div>
       </div>
     );
@@ -2961,53 +2964,6 @@ const App = () => {
                   >
                     <span style={{ fontSize: '14px' }}>{apiKeyConfigured ? '✓' : '🔑'}</span>
                     {apiKeyConfigured ? 'API Ready' : 'Setup API'}
-                  </button>
-                  
-                  {/* Generate Docs Button */}
-                  <button
-                    onClick={handleGenerateDocs}
-                    disabled={isGeneratingDocs}
-                    style={{
-                      background: isGeneratingDocs
-                        ? 'rgba(100, 255, 218, 0.3)'
-                        : docsGenerated
-                          ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-                          : 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '8px 14px',
-                      color: isGeneratingDocs ? '#64ffda' : '#0f172a',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: isGeneratingDocs ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s ease',
-                      boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
-                    }}
-                    title={apiKeyConfigured ? `Generate ${selectedPersona} documentation` : 'Configure API key first'}
-                  >
-                    {isGeneratingDocs ? (
-                      <>
-                        <span style={{
-                          width: '14px',
-                          height: '14px',
-                          border: '2px solid rgba(100, 255, 218, 0.3)',
-                          borderTop: '2px solid #64ffda',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite',
-                        }} />
-                        Generating...
-                      </>
-                    ) : docsGenerated ? (
-                      <>✅ Regenerate</>
-                    ) : (
-                      <>
-                        📝 Generate
-                        {!apiKeyConfigured && <span style={{ fontSize: '10px', marginLeft: '4px' }}>🔑</span>}
-                      </>
-                    )}
                   </button>
 
                   {/* View Full Documentation Button */}

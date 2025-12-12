@@ -152,16 +152,24 @@ export class RAGService {
         
         this.localDocsCache.clear();
         this.invertedIndex.clear();
+        this.inMemoryCollection.clear();
         
         chunks.forEach(chunk => {
           this.localDocsCache.set(chunk.id, chunk);
           this.indexDocument(chunk);
         });
         
-        console.log(`Loaded ${chunks.length} documents into local cache`);
+        // Also populate in-memory ChromaDB collection for vector search
+        if (this.useInMemoryChroma && chunks.length > 0) {
+          this.indexToInMemoryChroma(chunks);
+        }
+        
+        console.log(`Loaded ${chunks.length} documents into local cache and in-memory ChromaDB`);
       } catch (error) {
         console.error('Error loading local docs cache:', error);
       }
+    } else {
+      console.log('No search.json found, RAG will be populated during analysis');
     }
   }
 
@@ -237,13 +245,23 @@ export class RAGService {
       throw new Error('RAG service not initialized');
     }
 
-    // Use in-memory ChromaDB vector search
+    console.log(`RAG search: "${query}" - inMemory: ${this.inMemoryCollection.size}, localCache: ${this.localDocsCache.size}`);
+
+    // Try in-memory ChromaDB vector search first
     if (this.useInMemoryChroma && this.inMemoryCollection.size > 0) {
-      return this.searchInMemoryChroma(query, topK);
+      const results = this.searchInMemoryChroma(query, topK);
+      if (results.length > 0) {
+        return results;
+      }
     }
 
-    // Fallback to local TF-IDF search
-    return this.searchLocal(query, topK);
+    // Fallback to local TF-IDF search if vector search returns nothing
+    if (this.localDocsCache.size > 0) {
+      return this.searchLocal(query, topK);
+    }
+
+    console.log('RAG search: No documents indexed');
+    return [];
   }
 
   /**

@@ -705,14 +705,30 @@ export class VisualizationPanelReact {
     console.log('handleAskQuestion called with:', question);
     
     if (!this.ragService) {
-      console.log('RAG service not available');
-      this.panel?.webview.postMessage({
-        command: 'questionAnswer',
-        answer: 'RAG service is not available. Please analyze the workspace first by running "Analyze Codebase" command.',
-        relevantNodes: [],
-        confidence: 'low'
-      });
-      return;
+      console.log('RAG service not available, trying to initialize...');
+      
+      // Try to initialize RAG service
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        try {
+          const { RAGService } = await import('../rag/ragService');
+          this.ragService = new RAGService();
+          await this.ragService.initialize(workspaceFolders[0].uri);
+          console.log('RAG service initialized on-demand');
+        } catch (error) {
+          console.error('Failed to initialize RAG service:', error);
+        }
+      }
+      
+      if (!this.ragService) {
+        this.panel?.webview.postMessage({
+          command: 'questionAnswer',
+          answer: 'RAG service is not available. Please analyze the workspace first by running "Analyze Codebase" command.',
+          relevantNodes: [],
+          confidence: 'low'
+        });
+        return;
+      }
     }
 
     try {
