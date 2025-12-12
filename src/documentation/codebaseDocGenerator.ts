@@ -154,6 +154,116 @@ export class CodebaseDocGenerator {
   }
 
   /**
+   * Generate documentation using ONLY AST parsers - NO LLM calls
+   * Scans the entire repo and stores information in JSON files
+   * This is fast and doesn't require an API key
+   */
+  async generateCodebaseDocsWithAST(
+    analysisResult: AnalysisResult,
+    workspaceUri: vscode.Uri,
+    forceRegenerate: boolean = false
+  ): Promise<CodebaseDocumentation> {
+    this.workspaceRoot = workspaceUri.fsPath;
+    this.docsFolder = path.join(this.workspaceRoot, '.doc_sync');
+    this.nodesFolder = path.join(this.docsFolder, 'nodes');
+    this.graphFolder = path.join(this.docsFolder, 'graph');
+    
+    // AST-only mode - no LLM
+    this.useLLM = false;
+    this.useAgent = false;
+
+    vscode.window.showInformationMessage('📝 Scanning codebase with AST parsers...');
+
+    // Create folder structure if it doesn't exist
+    const foldersToCreate = [
+      this.docsFolder,
+      this.nodesFolder,
+      this.graphFolder
+    ];
+    
+    for (const folder of foldersToCreate) {
+      if (!fs.existsSync(folder)) {
+        fs.mkdirSync(folder, { recursive: true });
+      }
+    }
+
+    const { nodes, edges } = analysisResult.graph;
+    const projectName = path.basename(this.workspaceRoot);
+
+    // Check which nodes already have docs (skip them unless forceRegenerate)
+    let nodesToProcess = nodes;
+    const existingDocs = new Map<string, ComponentDoc>();
+    
+    if (!forceRegenerate) {
+      const { nodesToProcess: remaining, existingDocs: cached } = 
+        await this.loadExistingDocsAndFilter(nodes);
+      nodesToProcess = remaining;
+      cached.forEach((doc, id) => existingDocs.set(id, doc));
+      
+      if (cached.size > 0) {
+        vscode.window.showInformationMessage(
+          `⚡ Skipping ${cached.size} cached nodes, processing ${remaining.length} new/changed nodes`
+        );
+      }
+    }
+
+    // Generate documentation for each component using AST only (no LLM)
+    let componentDocs: ComponentDoc[];
+    
+    if (nodesToProcess.length === 0) {
+      // All nodes have existing docs
+      componentDocs = Array.from(existingDocs.values());
+    } else {
+      // Use pure AST/rule-based documentation generation
+      const newDocs = this.generateComponentDocsWithASTOnly(nodesToProcess, edges, nodes);
+      componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
+    }
+
+    // Analyze architecture
+    const architecture = this.analyzeArchitecture(nodes, edges);
+
+    // Create the full documentation object
+    const documentation: CodebaseDocumentation = {
+      projectName,
+      generatedAt: new Date().toISOString(),
+      totalFiles: analysisResult.graph.metadata.totalFiles,
+      totalComponents: nodes.length,
+      languages: analysisResult.graph.metadata.languages,
+      entryPoints: analysisResult.graph.metadata.entryPoints || [],
+      components: componentDocs,
+      architecture,
+      generatedWithLLM: false,
+      generatedWithAgent: false
+    };
+
+    // Save documentation files
+    await this.saveDocumentation(documentation);
+
+    vscode.window.showInformationMessage(`✅ AST scan complete! ${componentDocs.length} components documented.`);
+
+    return documentation;
+  }
+
+  /**
+   * Generate documentation for all components using AST only (no LLM)
+   * Pure rule-based analysis - fast and doesn't require API key
+   */
+  private generateComponentDocsWithASTOnly(
+    nodes: CodeNode[],
+    edges: CodeEdge[],
+    allNodes: CodeNode[]
+  ): ComponentDoc[] {
+    const componentDocs: ComponentDoc[] = [];
+    
+    for (const node of nodes) {
+      const doc = this.generateComponentDoc(node, edges, allNodes);
+      componentDocs.push(doc);
+    }
+
+    return componentDocs;
+  }
+
+  /**
    * Generate documentation for the entire codebase
    * Optimized to skip nodes that already have documentation
    */

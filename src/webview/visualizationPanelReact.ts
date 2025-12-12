@@ -202,7 +202,9 @@ export class VisualizationPanelReact {
   }
 
   /**
-   * Handle View Docs with Persona - generates full docs with LLM, saves to .doc_sync, indexes for RAG
+   * Handle View Docs with Persona - 
+   * 1. Uses AST parsers to scan repo and save to .doc_sync (no LLM)
+   * 2. Uses LLM only for RAG/Ask AI and persona overview display
    */
   private async handleViewDocsWithPersona(
     persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst',
@@ -213,30 +215,22 @@ export class VisualizationPanelReact {
       const litellm = getLiteLLMService();
       litellm.reinitialize();
 
-      if (!litellm.isReady()) {
-        this.panel?.webview.postMessage({ command: 'personaDocsError' });
-        vscode.window.showErrorMessage('API key required for View Docs. Please configure your API key.');
-        return;
-      }
-
-      // Generate full documentation with LLM and save to .doc_sync
+      // Step 1: Generate documentation using AST parsers only (no LLM)
+      // This scans the entire repo and stores information in JSON files
       if (this.currentAnalysis) {
         const { CodebaseDocGenerator } = await import('../documentation/codebaseDocGenerator');
         const docGenerator = new CodebaseDocGenerator();
         
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders && workspaceFolders.length > 0) {
-          vscode.window.showInformationMessage(`📝 Generating ${persona} documentation with AI...`);
-          
-          // Generate documentation with LLM (this saves to .doc_sync)
-          const documentation = await docGenerator.generateCodebaseDocs(
+          // Generate documentation with AST only (NO LLM - fast and doesn't require API key)
+          const documentation = await docGenerator.generateCodebaseDocsWithAST(
             this.currentAnalysis,
             workspaceFolders[0].uri,
-            true, // Use AI
-            persona
+            false // Don't force regenerate if cache exists
           );
           
-          // Index for RAG so Ask AI works
+          // Step 2: Index for RAG so Ask AI works (this enables LLM-powered Q&A)
           if (this.ragService) {
             const ragChunks = docGenerator.generateRAGChunks(documentation);
             await this.ragService.indexDocuments(ragChunks);
@@ -256,14 +250,20 @@ export class VisualizationPanelReact {
         }
       }
 
-      // Generate persona-specific overview using LLM
-      const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
-      
-      this.panel?.webview.postMessage({
-        command: 'personaDocsReady',
-        content,
-        persona
-      });
+      // Step 3: Generate persona-specific overview using LLM (only LLM call for View Docs display)
+      if (litellm.isReady()) {
+        const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
+        
+        this.panel?.webview.postMessage({
+          command: 'personaDocsReady',
+          content,
+          persona
+        });
+      } else {
+        // No API key - show error and prompt to configure
+        this.panel?.webview.postMessage({ command: 'personaDocsError' });
+        vscode.window.showErrorMessage('API key required for View Docs. Please configure your API key.');
+      }
     } catch (error) {
       console.error('Failed to generate persona docs:', error);
       this.panel?.webview.postMessage({ command: 'personaDocsError' });
