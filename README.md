@@ -39,7 +39,7 @@ An advanced VS Code extension that provides interactive visualization of your co
 - **Real-time Updates**: Changes are reflected immediately in your codebase
 - **Structured Prompts**: Uses ClineMessageBuilder for optimal code change requests
 
-### 🔧 Supported Languages
+### Supported Languages
 
 - Java (including Spring Boot, Jakarta EE)
 - React (JavaScript/TypeScript)

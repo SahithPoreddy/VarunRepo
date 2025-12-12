@@ -1,7 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ChromaClient, Collection } from 'chromadb';
+
+// In-memory ChromaDB types (simplified for in-memory use)
+interface InMemoryDocument {
+  id: string;
+  content: string;
+  metadata: Record<string, any>;
+  embedding?: number[];
+}
 
 interface RAGDocument {
   id: string;
@@ -17,8 +24,8 @@ interface SearchResult {
 }
 
 /**
- * RAG Service with ChromaDB support for vector-based semantic search
- * Falls back to local TF-IDF search if ChromaDB is unavailable
+ * RAG Service with In-Memory ChromaDB for vector-based semantic search
+ * Uses a pure in-memory implementation - no external server required
  */
 export class RAGService {
   private isInitialized: boolean = false;
@@ -26,61 +33,101 @@ export class RAGService {
   private localDocsCache: Map<string, RAGDocument> = new Map();
   private invertedIndex: Map<string, Set<string>> = new Map(); // word -> document IDs
   
-  // ChromaDB
-  private chromaClient: ChromaClient | null = null;
-  private chromaCollection: Collection | null = null;
-  private useChromaDB: boolean = false;
+  // In-Memory ChromaDB
+  private inMemoryCollection: Map<string, InMemoryDocument> = new Map();
   private collectionName: string = 'codebase_docs';
+  private useInMemoryChroma: boolean = true;
 
   /**
-   * Initialize the RAG service
+   * Initialize the RAG service with in-memory ChromaDB
    * @param workspaceUri The workspace URI
-   * @param chromaUrl Optional ChromaDB server URL (default: http://localhost:8000)
    */
-  async initialize(workspaceUri: vscode.Uri, chromaUrl?: string): Promise<boolean> {
+  async initialize(workspaceUri: vscode.Uri): Promise<boolean> {
     this.workspaceRoot = workspaceUri.fsPath;
     
     // Create unique collection name based on workspace
     const workspaceName = path.basename(this.workspaceRoot).replace(/[^a-zA-Z0-9]/g, '_');
     this.collectionName = `codebase_${workspaceName}`;
     
-    // Try to connect to ChromaDB if URL is provided
-    if (chromaUrl) {
-      try {
-        await this.initializeChromaDB(chromaUrl);
-      } catch (error) {
-        console.warn('ChromaDB initialization failed, using local fallback:', error);
-      }
-    }
+    // Initialize in-memory ChromaDB collection
+    this.initializeInMemoryChroma();
     
-    // Always load local cache as fallback
+    // Load documents into in-memory store
     await this.loadLocalDocsCache();
     this.isInitialized = true;
     
-    console.log(`RAG Service initialized (ChromaDB: ${this.useChromaDB ? 'enabled' : 'disabled'})`);
+    console.log(`RAG Service initialized with In-Memory ChromaDB (collection: ${this.collectionName})`);
     return true;
   }
 
   /**
-   * Initialize ChromaDB connection
+   * Initialize in-memory ChromaDB collection
    */
-  private async initializeChromaDB(chromaUrl: string): Promise<void> {
-    this.chromaClient = new ChromaClient({ path: chromaUrl });
+  private initializeInMemoryChroma(): void {
+    this.inMemoryCollection = new Map();
+    this.useInMemoryChroma = true;
+    console.log(`In-Memory ChromaDB initialized: collection "${this.collectionName}"`);
+  }
+
+  /**
+   * Generate simple embedding for text (TF-IDF inspired vector)
+   * This is a lightweight embedding for in-memory semantic search
+   */
+  private generateEmbedding(text: string): number[] {
+    const words = this.tokenize(text);
+    const wordFreq = new Map<string, number>();
     
-    // Test connection
-    await this.chromaClient.listCollections();
-    
-    // Get or create collection
-    this.chromaCollection = await this.chromaClient.getOrCreateCollection({
-      name: this.collectionName,
-      metadata: { 
-        workspace: this.workspaceRoot,
-        created: new Date().toISOString()
-      }
+    // Calculate word frequencies
+    words.forEach(word => {
+      wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
     });
     
-    this.useChromaDB = true;
-    console.log(`ChromaDB connected: collection "${this.collectionName}"`);
+    // Create a fixed-size embedding vector (256 dimensions using hash)
+    const embeddingSize = 256;
+    const embedding = new Array(embeddingSize).fill(0);
+    
+    wordFreq.forEach((freq, word) => {
+      // Hash word to get position in embedding
+      let hash = 0;
+      for (let i = 0; i < word.length; i++) {
+        hash = ((hash << 5) - hash) + word.charCodeAt(i);
+        hash = hash & hash;
+      }
+      const position = Math.abs(hash) % embeddingSize;
+      
+      // Add weighted frequency to embedding
+      embedding[position] += freq * Math.log(word.length + 1);
+    });
+    
+    // Normalize embedding
+    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < embedding.length; i++) {
+        embedding[i] /= magnitude;
+      }
+    }
+    
+    return embedding;
+  }
+
+  /**
+   * Calculate cosine similarity between two embeddings
+   */
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) return 0;
+    
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    
+    const magnitude = Math.sqrt(normA) * Math.sqrt(normB);
+    return magnitude > 0 ? dotProduct / magnitude : 0;
   }
 
   /**
@@ -148,66 +195,42 @@ export class RAGService {
       this.indexDocument(doc);
     });
 
-    // Also index in ChromaDB if available
-    if (this.useChromaDB && this.chromaCollection) {
-      try {
-        await this.indexToChromaDB(documents);
-      } catch (error) {
-        console.error('ChromaDB indexing failed:', error);
-      }
+    // Also index in in-memory ChromaDB
+    if (this.useInMemoryChroma) {
+      this.indexToInMemoryChroma(documents);
     }
     
-    console.log(`Indexed ${documents.length} documents (ChromaDB: ${this.useChromaDB})`);
+    console.log(`Indexed ${documents.length} documents (In-Memory ChromaDB: ${this.useInMemoryChroma})`);
   }
 
   /**
-   * Index documents into ChromaDB
+   * Index documents into in-memory ChromaDB
    */
-  private async indexToChromaDB(documents: RAGDocument[]): Promise<void> {
-    if (!this.chromaCollection) return;
-
-    const ids: string[] = [];
-    const contents: string[] = [];
-    const metadatas: Record<string, any>[] = [];
-
+  private indexToInMemoryChroma(documents: RAGDocument[]): void {
     for (const doc of documents) {
       const sanitizedId = doc.id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100);
-      ids.push(sanitizedId);
-      contents.push(doc.content);
-      metadatas.push({ ...doc.metadata, originalId: doc.id });
-    }
-
-    // Delete existing then add
-    try {
-      await this.chromaCollection.delete({ ids });
-    } catch (e) { /* ignore */ }
-
-    // Add in batches
-    const batchSize = 100;
-    for (let i = 0; i < ids.length; i += batchSize) {
-      await this.chromaCollection.add({
-        ids: ids.slice(i, i + batchSize),
-        documents: contents.slice(i, i + batchSize),
-        metadatas: metadatas.slice(i, i + batchSize)
+      const embedding = this.generateEmbedding(doc.content + ' ' + (doc.metadata.name || ''));
+      
+      this.inMemoryCollection.set(sanitizedId, {
+        id: sanitizedId,
+        content: doc.content,
+        metadata: { ...doc.metadata, originalId: doc.id },
+        embedding
       });
     }
   }
 
   /**
-   * Search for similar documents using ChromaDB or TF-IDF
+   * Search for similar documents using in-memory ChromaDB
    */
   async search(query: string, topK: number = 5): Promise<SearchResult[]> {
     if (!this.isInitialized) {
       throw new Error('RAG service not initialized');
     }
 
-    // Try ChromaDB first if available
-    if (this.useChromaDB && this.chromaCollection) {
-      try {
-        return await this.searchChromaDB(query, topK);
-      } catch (error) {
-        console.error('ChromaDB search failed, falling back to local:', error);
-      }
+    // Use in-memory ChromaDB vector search
+    if (this.useInMemoryChroma && this.inMemoryCollection.size > 0) {
+      return this.searchInMemoryChroma(query, topK);
     }
 
     // Fallback to local TF-IDF search
@@ -215,37 +238,31 @@ export class RAGService {
   }
 
   /**
-   * Search using ChromaDB vector similarity
+   * Search using in-memory ChromaDB vector similarity
    */
-  private async searchChromaDB(query: string, topK: number): Promise<SearchResult[]> {
-    if (!this.chromaCollection) return [];
-
-    const results = await this.chromaCollection.query({
-      queryTexts: [query],
-      nResults: topK
+  private searchInMemoryChroma(query: string, topK: number): SearchResult[] {
+    const queryEmbedding = this.generateEmbedding(query);
+    
+    // Calculate similarity scores for all documents
+    const scores: Array<{ doc: InMemoryDocument; score: number }> = [];
+    
+    this.inMemoryCollection.forEach(doc => {
+      if (doc.embedding) {
+        const similarity = this.cosineSimilarity(queryEmbedding, doc.embedding);
+        scores.push({ doc, score: similarity });
+      }
     });
+    
+    // Sort by score descending and take top K
+    scores.sort((a, b) => b.score - a.score);
+    const topResults = scores.slice(0, topK);
 
-    if (!results.ids?.[0]) return [];
-
-    const searchResults: SearchResult[] = [];
-    for (let i = 0; i < results.ids[0].length; i++) {
-      const id = results.ids[0][i];
-      const document = results.documents?.[0]?.[i] || '';
-      const metadata = results.metadatas?.[0]?.[i] || {};
-      const distance = results.distances?.[0]?.[i] || 0;
-      
-      // Convert distance to similarity score
-      const score = 1 / (1 + distance);
-
-      searchResults.push({
-        id: (metadata as any).originalId || id,
-        content: document,
-        metadata: metadata as Record<string, any>,
-        score
-      });
-    }
-
-    return searchResults;
+    return topResults.map(({ doc, score }) => ({
+      id: (doc.metadata as any).originalId || doc.id,
+      content: doc.content,
+      metadata: doc.metadata,
+      score
+    }));
   }
 
   /**

@@ -1990,6 +1990,7 @@ const App = () => {
   } | null>(null);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
   const [showCopilotPanel, setShowCopilotPanel] = useState(false);
+  const [selectedPersona, setSelectedPersona] = useState<'developer' | 'product-manager' | 'architect' | 'business-analyst'>('developer');
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState<{
     answer: string;
@@ -2580,10 +2581,10 @@ const App = () => {
     });
   }, []);
 
-  // Handle generate documentation
+  // Handle generate documentation with persona
   const handleGenerateDocs = useCallback(() => {
-    vscode.postMessage({ command: 'generateDocs' });
-  }, []);
+    vscode.postMessage({ command: 'generateDocs', persona: selectedPersona });
+  }, [selectedPersona]);
 
   // Handle configure API key
   const handleConfigureApiKey = useCallback(() => {
@@ -2749,7 +2750,46 @@ const App = () => {
                   marginLeft: '5px',
                   display: 'flex',
                   gap: '10px',
+                  alignItems: 'center',
                 }}>
+                  {/* Persona Dropdown */}
+                  <div style={{ position: 'relative' }}>
+                    <select
+                      value={selectedPersona}
+                      onChange={(e) => setSelectedPersona(e.target.value as any)}
+                      style={{
+                        background: 'rgba(30, 41, 59, 0.95)',
+                        border: '1px solid rgba(100, 255, 218, 0.3)',
+                        borderRadius: '8px',
+                        padding: '8px 12px',
+                        color: '#64ffda',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        outline: 'none',
+                        appearance: 'none',
+                        paddingRight: '28px',
+                        minWidth: '140px',
+                      }}
+                      title="Select documentation persona"
+                    >
+                      <option value="developer" style={{ background: '#1e293b', color: '#e2e8f0' }}>👨‍💻 Developer</option>
+                      <option value="architect" style={{ background: '#1e293b', color: '#e2e8f0' }}>🏗️ Architect</option>
+                      <option value="product-manager" style={{ background: '#1e293b', color: '#e2e8f0' }}>📋 Product Manager</option>
+                      <option value="business-analyst" style={{ background: '#1e293b', color: '#e2e8f0' }}>📊 Business Analyst</option>
+                    </select>
+                    <span style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      pointerEvents: 'none',
+                      color: '#64ffda',
+                      fontSize: '10px',
+                    }}>▼</span>
+                  </div>
+                  
+                  {/* Generate Docs Button */}
                   <button
                     onClick={handleGenerateDocs}
                     disabled={isGeneratingDocs}
@@ -2772,7 +2812,7 @@ const App = () => {
                       transition: 'all 0.2s ease',
                       boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
                     }}
-                    title={docsGenerated ? "Regenerate AI Documentation" : "Generate AI Documentation for all nodes"}
+                    title={`Generate ${selectedPersona} documentation`}
                   >
                     {isGeneratingDocs ? (
                       <>
@@ -2787,9 +2827,9 @@ const App = () => {
                         Generating...
                       </>
                     ) : docsGenerated ? (
-                      <>✅ Regenerate Docs</>
+                      <>✅ Regenerate</>
                     ) : (
-                      <>📝 Generate AI Docs</>
+                      <>📝 Generate</>
                     )}
                   </button>
 

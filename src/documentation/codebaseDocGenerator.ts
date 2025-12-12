@@ -70,6 +70,7 @@ export class CodebaseDocGenerator {
   private agent: DocumentationAgent;
   private useLLM: boolean = true;
   private useAgent: boolean = true; // Prefer agent over simple LLM calls
+  private currentPersona: Persona = 'developer';
 
   constructor() {
     this.litellm = getLiteLLMService();
@@ -160,6 +161,7 @@ export class CodebaseDocGenerator {
     analysisResult: AnalysisResult,
     workspaceUri: vscode.Uri,
     useAI: boolean = true,
+    persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst' = 'developer',
     forceRegenerate: boolean = false
   ): Promise<CodebaseDocumentation> {
     this.workspaceRoot = workspaceUri.fsPath;
@@ -169,16 +171,20 @@ export class CodebaseDocGenerator {
     this.useLLM = useAI && this.litellm.isReady();
     this.useAgent = useAI && this.agent.isReady();
 
-    // Show progress notification
+    // Show progress notification with persona
+    const personaLabel = persona.charAt(0).toUpperCase() + persona.slice(1).replace('-', ' ');
     let llmStatus: string;
     if (this.useAgent) {
-      llmStatus = '🧠 Using AI Agent for intelligent documentation';
+      llmStatus = `🧠 Generating ${personaLabel} docs using AI Agent`;
     } else if (this.useLLM) {
-      llmStatus = '🤖 Using LiteLLM for AI-powered documentation';
+      llmStatus = `🤖 Generating ${personaLabel} docs using LiteLLM`;
     } else {
-      llmStatus = '📝 Using rule-based documentation';
+      llmStatus = `📝 Generating ${personaLabel} docs (rule-based)`;
     }
     vscode.window.showInformationMessage(llmStatus);
+
+    // Store current persona for use in generation
+    this.currentPersona = persona;
 
     // Create folder structure if it doesn't exist
     // Note: 'docs' folder no longer needed - all docs are in docs.json

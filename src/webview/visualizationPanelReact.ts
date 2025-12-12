@@ -116,7 +116,7 @@ export class VisualizationPanelReact {
         break;
 
       case 'generateDocs':
-        await this.handleGenerateDocs();
+        await this.handleGenerateDocs(message.persona || 'developer');
         break;
 
       case 'configureApiKey':
@@ -193,7 +193,7 @@ export class VisualizationPanelReact {
     }
   }
 
-  private async handleGenerateDocs() {
+  private async handleGenerateDocs(persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst' = 'developer') {
     if (!this.currentAnalysis) {
       vscode.window.showErrorMessage('No analysis data available. Please run analysis first.');
       return;
@@ -228,11 +228,12 @@ export class VisualizationPanelReact {
         throw new Error('No workspace folder found');
       }
 
-      // Generate documentation
+      // Generate documentation with selected persona
       const documentation = await docGenerator.generateCodebaseDocs(
         this.currentAnalysis,
         workspaceFolders[0].uri,
-        true // Use AI
+        true, // Use AI
+        persona
       );
 
       const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs');
@@ -241,7 +242,8 @@ export class VisualizationPanelReact {
       this.panel?.webview.postMessage({ 
         command: 'docsGenerationComplete',
         docsCount: documentation.components.length,
-        usedAI: documentation.generatedWithLLM || documentation.generatedWithAgent
+        usedAI: documentation.generatedWithLLM || documentation.generatedWithAgent,
+        persona: persona
       });
       
       // Load and send the generated docs.json to webview
@@ -249,8 +251,9 @@ export class VisualizationPanelReact {
       
       // Show success message - DON'T open README.md automatically
       // User can view docs in the modal when clicking on nodes
+      const personaLabel = persona.charAt(0).toUpperCase() + persona.slice(1).replace('-', ' ');
       vscode.window.showInformationMessage(
-        `✅ AI Documentation generated for ${documentation.components.length} components! Click on any node to see detailed docs.`,
+        `✅ ${personaLabel} documentation generated for ${documentation.components.length} components! Click on any node to see detailed docs.`,
         'Open Docs Folder'
       ).then(selection => {
         if (selection === 'Open Docs Folder') {

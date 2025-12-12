@@ -355,21 +355,15 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
 
       progress.report({ increment: 50, message: 'Indexing for RAG...' });
       
-      // Initialize RAG service and index documents
+      // Initialize RAG service with in-memory ChromaDB and index documents
       try {
-        // Check if ChromaDB is enabled
-        const config = vscode.workspace.getConfiguration('codebaseVisualizer');
-        const chromaEnabled = config.get<boolean>('chromadb.enabled', false);
-        const chromaUrl = chromaEnabled ? config.get<string>('chromadb.url', 'http://localhost:8000') : undefined;
-        
-        await ragService.initialize(workspaceUri, chromaUrl);
+        await ragService.initialize(workspaceUri);
         
         if (documentation) {
           const ragChunks = docGenerator.generateRAGChunks(documentation);
           await ragService.indexDocuments(ragChunks);
-          logger.log('RAG indexing complete', { 
-            chunks: ragChunks.length,
-            usingLocalFallback: ragService.isUsingLocalFallback()
+          logger.log('RAG indexing complete (In-Memory ChromaDB)', { 
+            chunks: ragChunks.length
           });
         }
       } catch (error) {
