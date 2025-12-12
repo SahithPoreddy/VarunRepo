@@ -538,6 +538,9 @@ class VisualizationPanelReact {
             case 'generateDocs':
                 await this.handleGenerateDocs(message.persona || 'developer');
                 break;
+            case 'viewDocsWithPersona':
+                await this.handleViewDocsWithPersona(message.persona, message.codebaseSummary);
+                break;
             case 'configureApiKey':
                 await this.handleConfigureApiKey();
                 break;
@@ -600,6 +603,34 @@ class VisualizationPanelReact {
             getLiteLLMService().reinitialize();
             vscode.window.showInformationMessage('✅ API Key configured successfully! You can now generate AI-powered documentation.');
             this.sendApiKeyStatus();
+        }
+    }
+    /**
+     * Handle View Docs with Persona - uses LLM to format existing data
+     * Much faster than regenerating docs from scratch
+     */
+    async handleViewDocsWithPersona(persona, codebaseSummary) {
+        try {
+            const { getLiteLLMService } = await Promise.resolve().then(() => __importStar(__webpack_require__(4)));
+            const litellm = getLiteLLMService();
+            litellm.reinitialize();
+            if (!litellm.isReady()) {
+                this.panel?.webview.postMessage({ command: 'personaDocsError' });
+                vscode.window.showErrorMessage('API key required for View Docs. Please configure your API key.');
+                return;
+            }
+            // Generate persona-specific documentation using LLM
+            const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
+            this.panel?.webview.postMessage({
+                command: 'personaDocsReady',
+                content,
+                persona
+            });
+        }
+        catch (error) {
+            console.error('Failed to generate persona docs:', error);
+            this.panel?.webview.postMessage({ command: 'personaDocsError' });
+            vscode.window.showErrorMessage('Failed to generate documentation. Please try again.');
         }
     }
     async handleGenerateDocs(persona = 'developer') {
@@ -2102,43 +2133,108 @@ Provide ONLY the summary, no code or additional formatting.`;
         }
     }
     /**
+     * Generate a comprehensive persona-specific overview of the entire codebase
+     * Uses pre-extracted summary data for fast generation
+     */
+    async generatePersonaOverview(codebaseSummary, persona) {
+        if (!this.isReady()) {
+            throw new Error('LiteLLM is not configured');
+        }
+        const personaPrompts = {
+            'developer': `You are a senior developer writing comprehensive technical documentation.
+Focus on: code structure, key functions, implementation patterns, dependencies, and how to work with the code.
+Include: file organization, main entry points, important classes/functions, and technical details.`,
+            'architect': `You are a software architect analyzing system design.
+Focus on: system architecture, component relationships, design patterns, scalability, and technical decisions.
+Include: high-level structure, layer organization, data flow, and architectural considerations.`,
+            'product-manager': `You are a product manager documenting features for stakeholders.
+Focus on: what the product does, key features, user value, and business capabilities.
+Include: feature overview, user-facing functionality, and product capabilities.`,
+            'business-analyst': `You are a business analyst documenting system capabilities.
+Focus on: business processes, data flows, integrations, and functional requirements.
+Include: system capabilities, process flows, and business logic overview.`
+        };
+        const nodeTypeSummary = Object.entries(codebaseSummary?.nodeTypes || {})
+            .map(([type, count]) => `${count} ${type}s`)
+            .join(', ');
+        const nodeDetails = (codebaseSummary?.nodes || [])
+            .map((n) => `- **${n.name}** (${n.type}): ${n.description || 'No description'}`)
+            .join('\n');
+        const prompt = `Generate comprehensive documentation for this codebase from a ${persona.replace('-', ' ')} perspective.
+
+## Codebase Summary
+- **Total Components**: ${codebaseSummary?.totalNodes || 0}
+- **Component Types**: ${nodeTypeSummary || 'Unknown'}
+${codebaseSummary?.architecture ? `
+## Architecture
+- **Overview**: ${codebaseSummary.architecture.overview || 'N/A'}
+- **Layers**: ${(codebaseSummary.architecture.layers || []).join(', ') || 'N/A'}
+- **Patterns**: ${(codebaseSummary.architecture.patterns || []).join(', ') || 'N/A'}
+` : ''}
+
+## Key Components
+${nodeDetails || 'No component details available'}
+
+---
+
+Write a detailed, well-structured documentation (800-1200 words) using Markdown formatting with:
+1. **Executive Summary** - Brief overview of the project
+2. **${persona === 'developer' ? 'Technical Architecture' : persona === 'architect' ? 'System Design' : persona === 'product-manager' ? 'Product Overview' : 'Business Capabilities'}**
+3. **Key Components** - Important modules and their roles
+4. **${persona === 'developer' ? 'Code Organization' : persona === 'architect' ? 'Design Patterns' : persona === 'product-manager' ? 'Features & Functionality' : 'Process Flows'}**
+5. **${persona === 'developer' ? 'Getting Started' : persona === 'architect' ? 'Scalability Notes' : persona === 'product-manager' ? 'User Value' : 'Integration Points'}**
+
+Be thorough, informative, and write in a professional tone.`;
+        try {
+            const response = await this.client.chat.completions.create({
+                model: this.model,
+                messages: [
+                    { role: 'system', content: personaPrompts[persona] },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: 0.4,
+                max_tokens: 2000,
+            });
+            return response.choices[0]?.message?.content || 'Unable to generate documentation.';
+        }
+        catch (error) {
+            console.error('LiteLLM persona overview generation failed:', error);
+            throw error;
+        }
+    }
+    /**
      * Generate comprehensive persona-specific documentation for a code node
-     * This is the main method for generating rich, detailed documentation
+     * Optimized for faster generation with concise prompts
      */
     async generatePersonaDocumentation(node, persona) {
         if (!this.isReady()) {
             throw new Error('LiteLLM is not configured');
         }
         const systemPrompt = this.getSystemPrompt(persona);
-        const prompt = `Analyze this ${node.language} ${node.type} and generate comprehensive documentation:
+        // Truncate source code more aggressively for speed
+        const maxCodeLength = 2000;
+        const truncatedCode = node.sourceCode.slice(0, maxCodeLength);
+        const prompt = `Document this ${node.language} ${node.type}:
 
 \`\`\`${node.language}
-${node.sourceCode.slice(0, 4000)}${node.sourceCode.length > 4000 ? '\n// ... (truncated)' : ''}
+${truncatedCode}${node.sourceCode.length > maxCodeLength ? '\n// ...' : ''}
 \`\`\`
 
-**Name**: ${node.label}
-**Type**: ${node.type}
-**File**: ${node.filePath}
-**Lines**: ${node.startLine}-${node.endLine}
-${node.parameters ? `**Parameters**: ${node.parameters.map(p => `${p.name}: ${p.type}`).join(', ')}` : ''}
-${node.returnType ? `**Returns**: ${node.returnType}` : ''}
+**${node.label}** (${node.type}) - ${node.filePath}
+${node.parameters ? `Params: ${node.parameters.map(p => `${p.name}: ${p.type}`).join(', ')}` : ''}
+${node.returnType ? `Returns: ${node.returnType}` : ''}
 
-Generate COMPREHENSIVE documentation in this JSON format:
+Return JSON:
 {
-  "summary": "5-7 sentences providing a thorough summary explaining what this does, why it exists, the problem it solves, and its importance in the system",
-  "detailedDescription": "15-25 sentences with extensive explanation covering: purpose, implementation approach, internal workings, algorithm logic, data flow, error handling, and integration context. Use markdown formatting with **bold** for key terms, bullet lists, and headers where appropriate.",
-  "keyPoints": ["8-12 important points about this code - each should be 2-3 complete sentences explaining a specific aspect in detail"],
-  "sampleCode": "2-3 practical, well-commented code examples showing different usage scenarios. Include error handling examples.",
-  "complexity": "low" | "medium" | "high",
-  "personaInsights": "6-8 sentences with deep insights specific to the ${persona} perspective, including recommendations, considerations, and actionable advice",
-  "prerequisites": "What knowledge or setup is needed before using this code",
-  "commonPitfalls": "Common mistakes developers make and how to avoid them",
-  "relatedConcepts": "Related patterns, concepts, or components that work with this"
+  "summary": "2-3 sentence overview",
+  "detailedDescription": "5-8 sentences explaining purpose, how it works, and key logic",
+  "keyPoints": ["3-5 important points"],
+  "sampleCode": "One brief usage example",
+  "complexity": "low|medium|high",
+  "personaInsights": "2-3 sentences of ${persona}-specific advice"
 }
 
-IMPORTANT: Be EXTREMELY thorough and detailed. Each field should contain substantial content.
-This documentation is the PRIMARY reference for understanding this code - make it comprehensive, readable, and valuable.
-Aim for 800-1200 words total across all fields.`;
+Be concise and practical.`;
         try {
             const response = await this.client.chat.completions.create({
                 model: this.model,
@@ -2146,8 +2242,8 @@ Aim for 800-1200 words total across all fields.`;
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: prompt }
                 ],
-                temperature: 0.4,
-                max_tokens: 4000,
+                temperature: 0.3,
+                max_tokens: 1000,
             });
             const content = response.choices[0]?.message?.content || '{}';
             const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -2356,53 +2452,16 @@ Provide a brief explanation of how these components interact and why this relati
      */
     getSystemPrompt(persona) {
         const prompts = {
-            'developer': `You are a senior software developer with 15+ years of experience creating comprehensive, production-quality technical documentation.
+            'developer': `You are a senior software developer creating clear, concise technical documentation.
 
-Your documentation MUST be EXTENSIVE and include ALL of the following:
+Write practical documentation that covers:
+1. **Purpose**: What it does and why (2-3 sentences)
+2. **How it works**: Key implementation details (3-4 sentences)
+3. **Parameters & Returns**: Brief description of inputs/outputs
+4. **Usage**: A simple example
+5. **Notes**: Important edge cases or gotchas (2-3 points)
 
-## Purpose & Overview (8-10 sentences)
-- What specific problem this code solves
-- Why this solution was chosen over alternatives
-- Where this fits in the overall system architecture
-- Who should use this and when
-
-## Implementation Deep Dive (15-20 sentences)
-- Step-by-step breakdown of the internal logic
-- Data structures and algorithms used
-- State management and data flow
-- Concurrency considerations if applicable
-- Memory and performance characteristics
-
-## API Reference
-- **Parameters**: Each parameter with type, purpose, valid ranges, and examples
-- **Returns**: Return type, possible values, and error conditions
-- **Throws**: Exceptions that can be raised and when
-
-## Usage Examples (3-4 examples)
-- Basic usage with minimal code
-- Advanced usage with options
-- Error handling example
-- Integration example with other components
-
-## Dependencies & Requirements
-- External libraries and why they're needed
-- Environment requirements
-- Configuration prerequisites
-
-## Edge Cases & Error Handling (5-8 items)
-- Boundary conditions and how they're handled
-- Common failure modes
-- Validation logic
-- Recovery strategies
-
-## Best Practices & Gotchas
-- Do's and Don'ts when using this code
-- Performance optimization tips
-- Security considerations
-- Testing recommendations
-
-Write in a technical but accessible style. Be THOROUGH - developers will rely on this as their primary reference.
-Target: 600-900 words of rich, actionable, production-ready documentation.`,
+Be direct and technical. Target: 200-300 words of actionable documentation.`,
             'product-manager': `You are a senior product manager with 10+ years of experience documenting features for stakeholders and executives.
 
 Your documentation MUST be COMPREHENSIVE and include ALL of the following:
@@ -12345,7 +12404,7 @@ class CodebaseDocGenerator {
      */
     async generateComponentDocsWithLLM(nodes, edges) {
         const componentDocs = [];
-        const batchSize = 10; // Process 10 nodes at a time for speed
+        const batchSize = 15; // Process 15 nodes at a time for faster generation
         const totalNodes = nodes.length;
         // Show progress
         await vscode.window.withProgress({
@@ -12364,11 +12423,11 @@ class CodebaseDocGenerator {
                     increment: (batchSize / totalNodes) * 100,
                     message: `Processing ${i + 1}-${Math.min(i + batchSize, totalNodes)} of ${totalNodes} (${progressPercent}%)`
                 });
-                // Process batch in parallel with timeout
+                // Process batch in parallel with shorter timeout
                 const batchResults = await Promise.all(batch.map(async (node) => {
                     try {
-                        // Use a shorter timeout for each node
-                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000));
+                        // Shorter timeout for faster generation
+                        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000));
                         const docPromise = this.generateComponentDocWithLLM(node, edges, nodes);
                         return await Promise.race([docPromise, timeoutPromise]);
                     }
@@ -12380,7 +12439,7 @@ class CodebaseDocGenerator {
                 componentDocs.push(...batchResults);
                 // Minimal delay between batches
                 if (i + batchSize < nodes.length) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 }
             }
         });

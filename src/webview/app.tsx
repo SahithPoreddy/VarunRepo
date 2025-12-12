@@ -804,6 +804,7 @@ const ApiKeyConfigModal = ({
 // ============ Full Documentation Panel - Right Side Slide ============
 const DocsPanel = ({
   docsData,
+  personaFormattedDocs,
   onClose,
   onNodeClick,
   persona
@@ -815,13 +816,111 @@ const DocsPanel = ({
     architecture: { overview: string; layers: string[]; patterns: string[] };
     nodes: Record<string, any>;
     generatedWithAI: boolean;
-  };
+  } | null;
+  personaFormattedDocs: string | null;
   onClose: () => void;
   onNodeClick: (nodeId: string) => void;
   persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst';
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
+
+  const personaDisplayNames: Record<string, string> = {
+    'developer': '👨‍💻 Developer',
+    'architect': '🏗️ Architect',
+    'product-manager': '📋 Product Manager',
+    'business-analyst': '📊 Business Analyst',
+  };
+
+  // If we have persona formatted docs from LLM, show that instead
+  if (personaFormattedDocs) {
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 3000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'fadeIn 0.2s ease',
+      }}>
+        <div style={{
+          width: '90%',
+          maxWidth: '900px',
+          maxHeight: '90vh',
+          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+          borderRadius: '20px',
+          border: '1px solid rgba(100, 255, 218, 0.2)',
+          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(100, 255, 218, 0.05)',
+          }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: '18px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                📚 {docsData?.projectName || 'Project'} Documentation
+              </h2>
+              <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '12px' }}>
+                {personaDisplayNames[persona]} View
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                width: '36px',
+                height: '36px',
+                cursor: 'pointer',
+                color: '#ef4444',
+                fontSize: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content */}
+          <div style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '24px 32px',
+          }}>
+            <div
+              className="markdown-content"
+              style={{
+                color: '#e2e8f0',
+                fontSize: '14px',
+                lineHeight: 1.8,
+              }}
+              dangerouslySetInnerHTML={{ __html: marked(personaFormattedDocs) as string }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Original DocsPanel logic for node-based docs
+  if (!docsData) return null;
 
   const nodeList = Object.values(docsData.nodes || {});
   const nodeTypes = Array.from(new Set(nodeList.map((n: any) => n.type)));
@@ -959,32 +1058,6 @@ const DocsPanel = ({
         <div>
           <h2 style={{ margin: 0, fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
             📚 {docsData.projectName} Documentation
-            {docsData.generatedWithAI ? (
-              <span style={{
-                background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
-                color: '#0f172a',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontSize: '10px',
-                fontWeight: 700,
-              }}>
-                🤖 AI Generated
-              </span>
-            ) : (
-              <span style={{
-                background: 'rgba(251, 191, 36, 0.2)',
-                color: '#fbbf24',
-                padding: '2px 8px',
-                borderRadius: '10px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'help',
-              }}
-              title="Configure API key for AI-powered documentation"
-              >
-                📝 Basic (No API Key)
-              </span>
-            )}
           </h2>
           <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }}>
             {personaLabels[persona]} View • {nodeList.length} components
@@ -2019,6 +2092,7 @@ const App = () => {
   const [showViewDocsPersonaModal, setShowViewDocsPersonaModal] = useState(false);
   const [viewDocsLoading, setViewDocsLoading] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<'developer' | 'product-manager' | 'architect' | 'business-analyst'>('developer');
+  const [personaFormattedDocs, setPersonaFormattedDocs] = useState<string | null>(null);
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState<{
     answer: string;
@@ -2446,6 +2520,17 @@ const App = () => {
           }
           break;
 
+        case 'personaDocsReady':
+          // Receive LLM-formatted persona documentation
+          setPersonaFormattedDocs(message.content);
+          setViewDocsLoading(false);
+          setShowDocsPanel(true);
+          break;
+
+        case 'personaDocsError':
+          setViewDocsLoading(false);
+          break;
+
         case 'apiKeyStatus':
           setApiKeyConfigured(message.configured);
           break;
@@ -2635,14 +2720,36 @@ const App = () => {
     setShowViewDocsPersonaModal(true);
   }, [apiKeyConfigured]);
 
-  // Handle persona selection for View Docs - generates docs with selected persona then shows panel
+  // Handle persona selection for View Docs - sends existing data to LLM for persona formatting
   const handleViewDocsWithPersona = useCallback((persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst') => {
     setSelectedPersona(persona);
     setShowViewDocsPersonaModal(false);
     setViewDocsLoading(true);
-    // Generate docs with selected persona
-    vscode.postMessage({ command: 'generateDocs', persona });
-  }, []);
+    setPersonaFormattedDocs(null);
+    
+    // Prepare summary of the codebase from existing graph data
+    const codebaseSummary = graphData ? {
+      totalNodes: graphData.nodes.length,
+      nodeTypes: graphData.nodes.reduce((acc, n) => {
+        acc[n.type] = (acc[n.type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      nodes: graphData.nodes.slice(0, 50).map(n => ({
+        name: n.label,
+        type: n.type,
+        file: n.filePath,
+        description: n.description || n.metadata?.docstring || ''
+      })),
+      architecture: docsData?.architecture
+    } : null;
+    
+    // Send to backend for LLM formatting
+    vscode.postMessage({ 
+      command: 'viewDocsWithPersona', 
+      persona,
+      codebaseSummary
+    });
+  }, [graphData, docsData]);
 
   // Handle open Ask AI panel - requires API key  
   const handleOpenAskAI = useCallback(() => {
@@ -2855,43 +2962,6 @@ const App = () => {
                     <span style={{ fontSize: '14px' }}>{apiKeyConfigured ? '✓' : '🔑'}</span>
                     {apiKeyConfigured ? 'API Ready' : 'Setup API'}
                   </button>
-
-                  {/* Persona Dropdown */}
-                  <div style={{ position: 'relative' }}>
-                    <select
-                      value={selectedPersona}
-                      onChange={(e) => setSelectedPersona(e.target.value as any)}
-                      style={{
-                        background: 'rgba(30, 41, 59, 0.95)',
-                        border: '1px solid rgba(100, 255, 218, 0.3)',
-                        borderRadius: '8px',
-                        padding: '8px 12px',
-                        color: '#64ffda',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        appearance: 'none',
-                        paddingRight: '28px',
-                        minWidth: '140px',
-                      }}
-                      title="Select documentation persona"
-                    >
-                      <option value="developer" style={{ background: '#1e293b', color: '#e2e8f0' }}>👨‍💻 Developer</option>
-                      <option value="architect" style={{ background: '#1e293b', color: '#e2e8f0' }}>🏗️ Architect</option>
-                      <option value="product-manager" style={{ background: '#1e293b', color: '#e2e8f0' }}>📋 Product Manager</option>
-                      <option value="business-analyst" style={{ background: '#1e293b', color: '#e2e8f0' }}>📊 Business Analyst</option>
-                    </select>
-                    <span style={{
-                      position: 'absolute',
-                      right: '10px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      pointerEvents: 'none',
-                      color: '#64ffda',
-                      fontSize: '10px',
-                    }}>▼</span>
-                  </div>
                   
                   {/* Generate Docs Button */}
                   <button
@@ -3113,10 +3183,14 @@ const App = () => {
       )}
 
       {/* Full Documentation Panel */}
-      {showDocsPanel && docsData && (
+      {showDocsPanel && (docsData || personaFormattedDocs) && (
         <DocsPanel
           docsData={docsData}
-          onClose={() => setShowDocsPanel(false)}
+          personaFormattedDocs={personaFormattedDocs}
+          onClose={() => {
+            setShowDocsPanel(false);
+            setPersonaFormattedDocs(null);
+          }}
           persona={selectedPersona}
           onNodeClick={(nodeId) => {
             const node = graphData?.nodes.find(n => n.id === nodeId);

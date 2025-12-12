@@ -282,7 +282,7 @@ export class CodebaseDocGenerator {
     edges: CodeEdge[]
   ): Promise<ComponentDoc[]> {
     const componentDocs: ComponentDoc[] = [];
-    const batchSize = 10; // Process 10 nodes at a time for speed
+    const batchSize = 15; // Process 15 nodes at a time for faster generation
     const totalNodes = nodes.length;
 
     // Show progress
@@ -304,13 +304,13 @@ export class CodebaseDocGenerator {
           message: `Processing ${i + 1}-${Math.min(i + batchSize, totalNodes)} of ${totalNodes} (${progressPercent}%)`
         });
 
-        // Process batch in parallel with timeout
+        // Process batch in parallel with shorter timeout
         const batchResults = await Promise.all(
           batch.map(async (node) => {
             try {
-              // Use a shorter timeout for each node
+              // Shorter timeout for faster generation
               const timeoutPromise = new Promise<ComponentDoc>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), 5000)
+                setTimeout(() => reject(new Error('Timeout')), 3000)
               );
               const docPromise = this.generateComponentDocWithLLM(node, edges, nodes);
               return await Promise.race([docPromise, timeoutPromise]);
@@ -325,7 +325,7 @@ export class CodebaseDocGenerator {
 
         // Minimal delay between batches
         if (i + batchSize < nodes.length) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
     });

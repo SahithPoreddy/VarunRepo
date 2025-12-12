@@ -119,6 +119,10 @@ export class VisualizationPanelReact {
         await this.handleGenerateDocs(message.persona || 'developer');
         break;
 
+      case 'viewDocsWithPersona':
+        await this.handleViewDocsWithPersona(message.persona, message.codebaseSummary);
+        break;
+
       case 'configureApiKey':
         await this.handleConfigureApiKey();
         break;
@@ -194,6 +198,40 @@ export class VisualizationPanelReact {
       
       vscode.window.showInformationMessage('✅ API Key configured successfully! You can now generate AI-powered documentation.');
       this.sendApiKeyStatus();
+    }
+  }
+
+  /**
+   * Handle View Docs with Persona - uses LLM to format existing data
+   * Much faster than regenerating docs from scratch
+   */
+  private async handleViewDocsWithPersona(
+    persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst',
+    codebaseSummary: any
+  ) {
+    try {
+      const { getLiteLLMService } = await import('../llm/litellmService');
+      const litellm = getLiteLLMService();
+      litellm.reinitialize();
+
+      if (!litellm.isReady()) {
+        this.panel?.webview.postMessage({ command: 'personaDocsError' });
+        vscode.window.showErrorMessage('API key required for View Docs. Please configure your API key.');
+        return;
+      }
+
+      // Generate persona-specific documentation using LLM
+      const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
+      
+      this.panel?.webview.postMessage({
+        command: 'personaDocsReady',
+        content,
+        persona
+      });
+    } catch (error) {
+      console.error('Failed to generate persona docs:', error);
+      this.panel?.webview.postMessage({ command: 'personaDocsError' });
+      vscode.window.showErrorMessage('Failed to generate documentation. Please try again.');
     }
   }
 

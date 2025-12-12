@@ -72538,9 +72538,73 @@ const ApiKeyConfigModal = ({ onClose, onConfigure, }) => {
                             }, children: "\uD83D\uDD11 Configure API Key" })] })] }) }));
 };
 // ============ Full Documentation Panel - Right Side Slide ============
-const DocsPanel = ({ docsData, onClose, onNodeClick, persona }) => {
+const DocsPanel = ({ docsData, personaFormattedDocs, onClose, onNodeClick, persona }) => {
     const [searchTerm, setSearchTerm] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
     const [selectedType, setSelectedType] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('all');
+    const personaDisplayNames = {
+        'developer': '👨‍💻 Developer',
+        'architect': '🏗️ Architect',
+        'product-manager': '📋 Product Manager',
+        'business-analyst': '📊 Business Analyst',
+    };
+    // If we have persona formatted docs from LLM, show that instead
+    if (personaFormattedDocs) {
+        return ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { style: {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(8px)',
+                zIndex: 3000,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: 'fadeIn 0.2s ease',
+            }, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { style: {
+                    width: '90%',
+                    maxWidth: '900px',
+                    maxHeight: '90vh',
+                    background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+                    borderRadius: '20px',
+                    border: '1px solid rgba(100, 255, 218, 0.2)',
+                    boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { style: {
+                            padding: '20px 24px',
+                            borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            background: 'rgba(100, 255, 218, 0.05)',
+                        }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { style: { margin: 0, fontSize: '18px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }, children: ["\uD83D\uDCDA ", docsData?.projectName || 'Project', " Documentation"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { style: { margin: '4px 0 0 0', color: '#94a3b8', fontSize: '12px' }, children: [personaDisplayNames[persona], " View"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onClose, style: {
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    borderRadius: '8px',
+                                    width: '36px',
+                                    height: '36px',
+                                    cursor: 'pointer',
+                                    color: '#ef4444',
+                                    fontSize: '16px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }, children: "\u2715" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { style: {
+                            flex: 1,
+                            overflow: 'auto',
+                            padding: '24px 32px',
+                        }, children: (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", { className: "markdown-content", style: {
+                                color: '#e2e8f0',
+                                fontSize: '14px',
+                                lineHeight: 1.8,
+                            }, dangerouslySetInnerHTML: { __html: (0,marked__WEBPACK_IMPORTED_MODULE_9__.marked)(personaFormattedDocs) } }) })] }) }));
+    }
+    // Original DocsPanel logic for node-based docs
+    if (!docsData)
+        return null;
     const nodeList = Object.values(docsData.nodes || {});
     const nodeTypes = Array.from(new Set(nodeList.map((n) => n.type)));
     // Get persona-specific content for a node
@@ -72664,22 +72728,7 @@ const DocsPanel = ({ docsData, onClose, onNodeClick, persona }) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { style: { margin: 0, fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }, children: ["\uD83D\uDCDA ", docsData.projectName, " Documentation", docsData.generatedWithAI ? ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { style: {
-                                            background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
-                                            color: '#0f172a',
-                                            padding: '2px 8px',
-                                            borderRadius: '10px',
-                                            fontSize: '10px',
-                                            fontWeight: 700,
-                                        }, children: "\uD83E\uDD16 AI Generated" })) : ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { style: {
-                                            background: 'rgba(251, 191, 36, 0.2)',
-                                            color: '#fbbf24',
-                                            padding: '2px 8px',
-                                            borderRadius: '10px',
-                                            fontSize: '10px',
-                                            fontWeight: 700,
-                                            cursor: 'help',
-                                        }, title: "Configure API key for AI-powered documentation", children: "\uD83D\uDCDD Basic (No API Key)" }))] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { style: { margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }, children: [personaLabels[persona], " View \u2022 ", nodeList.length, " components"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onClose, style: {
+                }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h2", { style: { margin: 0, fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }, children: ["\uD83D\uDCDA ", docsData.projectName, " Documentation"] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("p", { style: { margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }, children: [personaLabels[persona], " View \u2022 ", nodeList.length, " components"] })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: onClose, style: {
                             background: 'rgba(239, 68, 68, 0.1)',
                             border: '1px solid rgba(239, 68, 68, 0.3)',
                             borderRadius: '8px',
@@ -73204,6 +73253,7 @@ const App = () => {
     const [showViewDocsPersonaModal, setShowViewDocsPersonaModal] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
     const [viewDocsLoading, setViewDocsLoading] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
     const [selectedPersona, setSelectedPersona] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('developer');
+    const [personaFormattedDocs, setPersonaFormattedDocs] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(null);
     const [qaQuestion, setQaQuestion] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)('');
     const [qaAnswer, setQaAnswer] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(null);
     const [qaLoading, setQaLoading] = (0,react__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
@@ -73580,6 +73630,15 @@ const App = () => {
                         setViewDocsLoading(false);
                     }
                     break;
+                case 'personaDocsReady':
+                    // Receive LLM-formatted persona documentation
+                    setPersonaFormattedDocs(message.content);
+                    setViewDocsLoading(false);
+                    setShowDocsPanel(true);
+                    break;
+                case 'personaDocsError':
+                    setViewDocsLoading(false);
+                    break;
                 case 'apiKeyStatus':
                     setApiKeyConfigured(message.configured);
                     break;
@@ -73746,14 +73805,34 @@ const App = () => {
         }
         setShowViewDocsPersonaModal(true);
     }, [apiKeyConfigured]);
-    // Handle persona selection for View Docs - generates docs with selected persona then shows panel
+    // Handle persona selection for View Docs - sends existing data to LLM for persona formatting
     const handleViewDocsWithPersona = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)((persona) => {
         setSelectedPersona(persona);
         setShowViewDocsPersonaModal(false);
         setViewDocsLoading(true);
-        // Generate docs with selected persona
-        vscode.postMessage({ command: 'generateDocs', persona });
-    }, []);
+        setPersonaFormattedDocs(null);
+        // Prepare summary of the codebase from existing graph data
+        const codebaseSummary = graphData ? {
+            totalNodes: graphData.nodes.length,
+            nodeTypes: graphData.nodes.reduce((acc, n) => {
+                acc[n.type] = (acc[n.type] || 0) + 1;
+                return acc;
+            }, {}),
+            nodes: graphData.nodes.slice(0, 50).map(n => ({
+                name: n.label,
+                type: n.type,
+                file: n.filePath,
+                description: n.description || n.metadata?.docstring || ''
+            })),
+            architecture: docsData?.architecture
+        } : null;
+        // Send to backend for LLM formatting
+        vscode.postMessage({
+            command: 'viewDocsWithPersona',
+            persona,
+            codebaseSummary
+        });
+    }, [graphData, docsData]);
     // Handle open Ask AI panel - requires API key  
     const handleOpenAskAI = (0,react__WEBPACK_IMPORTED_MODULE_1__.useCallback)(() => {
         if (!apiKeyConfigured) {
@@ -73838,28 +73917,7 @@ const App = () => {
                                                         alignItems: 'center',
                                                         gap: '6px',
                                                         transition: 'all 0.2s',
-                                                    }, title: apiKeyConfigured ? 'API key configured - Click to reconfigure' : 'Click to configure API key', children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { style: { fontSize: '14px' }, children: apiKeyConfigured ? '✓' : '🔑' }), apiKeyConfigured ? 'API Ready' : 'Setup API'] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", { style: { position: 'relative' }, children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("select", { value: selectedPersona, onChange: (e) => setSelectedPersona(e.target.value), style: {
-                                                                background: 'rgba(30, 41, 59, 0.95)',
-                                                                border: '1px solid rgba(100, 255, 218, 0.3)',
-                                                                borderRadius: '8px',
-                                                                padding: '8px 12px',
-                                                                color: '#64ffda',
-                                                                fontSize: '12px',
-                                                                fontWeight: 500,
-                                                                cursor: 'pointer',
-                                                                outline: 'none',
-                                                                appearance: 'none',
-                                                                paddingRight: '28px',
-                                                                minWidth: '140px',
-                                                            }, title: "Select documentation persona", children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "developer", style: { background: '#1e293b', color: '#e2e8f0' }, children: "\uD83D\uDC68\u200D\uD83D\uDCBB Developer" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "architect", style: { background: '#1e293b', color: '#e2e8f0' }, children: "\uD83C\uDFD7\uFE0F Architect" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "product-manager", style: { background: '#1e293b', color: '#e2e8f0' }, children: "\uD83D\uDCCB Product Manager" }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("option", { value: "business-analyst", style: { background: '#1e293b', color: '#e2e8f0' }, children: "\uD83D\uDCCA Business Analyst" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { style: {
-                                                                position: 'absolute',
-                                                                right: '10px',
-                                                                top: '50%',
-                                                                transform: 'translateY(-50%)',
-                                                                pointerEvents: 'none',
-                                                                color: '#64ffda',
-                                                                fontSize: '10px',
-                                                            }, children: "\u25BC" })] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleGenerateDocs, disabled: isGeneratingDocs, style: {
+                                                    }, title: apiKeyConfigured ? 'API key configured - Click to reconfigure' : 'Click to configure API key', children: [(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("span", { style: { fontSize: '14px' }, children: apiKeyConfigured ? '✓' : '🔑' }), apiKeyConfigured ? 'API Ready' : 'Setup API'] }), (0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("button", { onClick: handleGenerateDocs, disabled: isGeneratingDocs, style: {
                                                         background: isGeneratingDocs
                                                             ? 'rgba(100, 255, 218, 0.3)'
                                                             : docsGenerated
@@ -73966,7 +74024,10 @@ const App = () => {
                                         borderRadius: '8px',
                                         fontSize: '9px',
                                         fontWeight: 600,
-                                    }, children: "\uD83D\uDD11" }))] }) })] }), popupData && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(NodePopup, { data: popupData, onClose: () => setPopupData(null), onSendToCline: handleSendToCline, onOpenFile: handleOpenFile, allNodes: graphData?.nodes || [], nodeDocs: getNodeDocs(popupData.nodeId) })), showDocsPanel && docsData && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(DocsPanel, { docsData: docsData, onClose: () => setShowDocsPanel(false), persona: selectedPersona, onNodeClick: (nodeId) => {
+                                    }, children: "\uD83D\uDD11" }))] }) })] }), popupData && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(NodePopup, { data: popupData, onClose: () => setPopupData(null), onSendToCline: handleSendToCline, onOpenFile: handleOpenFile, allNodes: graphData?.nodes || [], nodeDocs: getNodeDocs(popupData.nodeId) })), showDocsPanel && (docsData || personaFormattedDocs) && ((0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)(DocsPanel, { docsData: docsData, personaFormattedDocs: personaFormattedDocs, onClose: () => {
+                    setShowDocsPanel(false);
+                    setPersonaFormattedDocs(null);
+                }, persona: selectedPersona, onNodeClick: (nodeId) => {
                     const node = graphData?.nodes.find(n => n.id === nodeId);
                     if (node) {
                         setPopupData({
