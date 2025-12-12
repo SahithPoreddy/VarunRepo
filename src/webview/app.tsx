@@ -2016,6 +2016,8 @@ const App = () => {
   const [showDocsPanel, setShowDocsPanel] = useState(false);
   const [showCopilotPanel, setShowCopilotPanel] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showViewDocsPersonaModal, setShowViewDocsPersonaModal] = useState(false);
+  const [viewDocsLoading, setViewDocsLoading] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<'developer' | 'product-manager' | 'architect' | 'business-analyst'>('developer');
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState<{
@@ -2423,10 +2425,13 @@ const App = () => {
         case 'docsGenerationComplete':
           setIsGeneratingDocs(false);
           setDocsGenerated(true);
+          // If viewDocsLoading is true, this was triggered by View Docs
+          setViewDocsLoading(false);
           break;
 
         case 'docsGenerationError':
           setIsGeneratingDocs(false);
+          setViewDocsLoading(false);
           break;
 
         case 'docsLoaded':
@@ -2435,6 +2440,9 @@ const App = () => {
             console.log('Docs loaded:', Object.keys(message.docs.nodes || {}).length, 'nodes');
             setDocsData(message.docs);
             setDocsGenerated(true);
+            // Auto-show docs panel when loaded via View Docs flow
+            setShowDocsPanel(true);
+            setViewDocsLoading(false);
           }
           break;
 
@@ -2618,14 +2626,23 @@ const App = () => {
     vscode.postMessage({ command: 'generateDocs', persona: selectedPersona });
   }, [selectedPersona, apiKeyConfigured]);
 
-  // Handle view docs - requires API key
+  // Handle view docs - requires API key, shows persona selection first
   const handleViewDocs = useCallback(() => {
     if (!apiKeyConfigured) {
       setShowApiKeyModal(true);
       return;
     }
-    setShowDocsPanel(true);
+    setShowViewDocsPersonaModal(true);
   }, [apiKeyConfigured]);
+
+  // Handle persona selection for View Docs - generates docs with selected persona then shows panel
+  const handleViewDocsWithPersona = useCallback((persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst') => {
+    setSelectedPersona(persona);
+    setShowViewDocsPersonaModal(false);
+    setViewDocsLoading(true);
+    // Generate docs with selected persona
+    vscode.postMessage({ command: 'generateDocs', persona });
+  }, []);
 
   // Handle open Ask AI panel - requires API key  
   const handleOpenAskAI = useCallback(() => {
@@ -2765,14 +2782,14 @@ const App = () => {
                   <span style={{ color: '#94a3b8', fontSize: '12px' }}>
                     {stats.visible}/{stats.nodes} nodes
                   </span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   {lastSyncTime && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '11px' }}>
-                      <span style={{ color: '#10b981' }}>●</span>
-                      Synced: {lastSyncTime}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#94a3b8', fontSize: '11px', marginLeft: '6px' }}>
+                      <span style={{ color: '#10b981' }}>✓</span>
+                      <span>{lastSyncTime}</span>
                     </div>
                   )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <button
                     onClick={() => setStatsPanelOpen(false)}
                     style={{
@@ -2924,30 +2941,47 @@ const App = () => {
                   </button>
 
                   {/* View Full Documentation Button */}
-                  {docsData && (
-                    <button
-                      onClick={handleViewDocs}
-                      style={{
-                        background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
-                        border: 'none',
-                        borderRadius: '8px',
-                        padding: '8px 14px',
-                        color: '#ffffff',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
-                      }}
-                      title={apiKeyConfigured ? 'View full project documentation' : 'Configure API key first'}
-                    >
-                      📚 View Docs
-                      {!apiKeyConfigured && <span style={{ fontSize: '10px', marginLeft: '4px' }}>🔑</span>}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleViewDocs}
+                    disabled={viewDocsLoading}
+                    style={{
+                      background: viewDocsLoading 
+                        ? 'rgba(139, 92, 246, 0.3)'
+                        : 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 14px',
+                      color: viewDocsLoading ? '#a78bfa' : '#ffffff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: viewDocsLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s ease',
+                      boxShadow: viewDocsLoading ? 'none' : '0 2px 8px rgba(139, 92, 246, 0.3)',
+                    }}
+                    title={!apiKeyConfigured ? 'Configure API key first' : viewDocsLoading ? 'Generating documentation...' : 'View AI-powered documentation'}
+                  >
+                    {viewDocsLoading ? (
+                      <>
+                        <span style={{
+                          width: '12px',
+                          height: '12px',
+                          border: '2px solid rgba(139, 92, 246, 0.3)',
+                          borderTop: '2px solid #a78bfa',
+                          borderRadius: '50%',
+                          animation: 'spin 1s linear infinite',
+                        }} />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        📚 View Docs
+                        {!apiKeyConfigured && <span style={{ fontSize: '10px', marginLeft: '4px' }}>🔑</span>}
+                      </>
+                    )}
+                  </button>
 
                   {/* Sync Changes Button */}
                   <button
@@ -3356,37 +3390,6 @@ const App = () => {
                     <span style={{ fontSize: '18px' }}>🧠</span>
                   </div>
                   <div style={{ flex: 1 }}>
-                    {/* Confidence & AI Badge */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: '20px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        background: qaAnswer.confidence === 'high'
-                          ? 'rgba(16, 185, 129, 0.15)'
-                          : qaAnswer.confidence === 'medium'
-                            ? 'rgba(245, 158, 11, 0.15)'
-                            : 'rgba(239, 68, 68, 0.15)',
-                        color: qaAnswer.confidence === 'high'
-                          ? '#10b981'
-                          : qaAnswer.confidence === 'medium'
-                            ? '#f59e0b'
-                            : '#ef4444',
-                        border: `1px solid ${
-                          qaAnswer.confidence === 'high'
-                            ? 'rgba(16, 185, 129, 0.3)'
-                            : qaAnswer.confidence === 'medium'
-                              ? 'rgba(245, 158, 11, 0.3)'
-                              : 'rgba(239, 68, 68, 0.3)'
-                        }`,
-                      }}>
-                        {qaAnswer.confidence === 'high' ? '✓ High confidence' :
-                          qaAnswer.confidence === 'medium' ? '◐ Medium confidence' :
-                            '○ Low confidence'}
-                      </span>
-                    </div>
-
                     {/* Answer Content */}
                     <div
                       className="markdown-content"
@@ -3665,6 +3668,167 @@ const App = () => {
           onClose={() => setShowApiKeyModal(false)}
           onConfigure={handleConfigureApiKey}
         />
+      )}
+
+      {/* View Docs Persona Selection Modal */}
+      {showViewDocsPersonaModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <div style={{
+            background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+            borderRadius: '20px',
+            border: '1px solid rgba(100, 255, 218, 0.2)',
+            padding: '32px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 25px 80px rgba(0, 0, 0, 0.6)',
+            animation: 'slideUp 0.3s ease',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '14px',
+                  background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(167, 139, 250, 0.3) 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '24px',
+                }}>
+                  📚
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, color: '#f8fafc', fontSize: '20px', fontWeight: 700 }}>
+                    View Documentation
+                  </h2>
+                  <p style={{ margin: '4px 0 0', color: '#94a3b8', fontSize: '13px' }}>
+                    Select your perspective for AI-generated docs
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowViewDocsPersonaModal(false)}
+                style={{
+                  background: 'rgba(100, 116, 139, 0.2)',
+                  border: 'none',
+                  borderRadius: '10px',
+                  width: '36px',
+                  height: '36px',
+                  cursor: 'pointer',
+                  color: '#94a3b8',
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Persona Options */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                { id: 'developer', icon: '👨‍💻', label: 'Developer', desc: 'Technical implementation details, code patterns, and architecture' },
+                { id: 'architect', icon: '🏗️', label: 'Architect', desc: 'System design, component relationships, and scalability' },
+                { id: 'product-manager', icon: '📋', label: 'Product Manager', desc: 'Feature overview, user flows, and business capabilities' },
+                { id: 'business-analyst', icon: '📊', label: 'Business Analyst', desc: 'Process flows, data models, and requirements mapping' },
+              ].map((persona) => (
+                <button
+                  key={persona.id}
+                  onClick={() => handleViewDocsWithPersona(persona.id as any)}
+                  disabled={viewDocsLoading}
+                  style={{
+                    background: 'rgba(30, 41, 59, 0.6)',
+                    border: '1px solid rgba(100, 255, 218, 0.15)',
+                    borderRadius: '14px',
+                    padding: '16px 20px',
+                    cursor: viewDocsLoading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px',
+                    transition: 'all 0.2s ease',
+                    opacity: viewDocsLoading ? 0.5 : 1,
+                    textAlign: 'left' as const,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!viewDocsLoading) {
+                      e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.4)';
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+                    e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.15)';
+                    e.currentTarget.style.transform = 'translateX(0)';
+                  }}
+                >
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(167, 139, 250, 0.2) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '22px',
+                    flexShrink: 0,
+                  }}>
+                    {persona.icon}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: '#f8fafc', fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>
+                      {persona.label}
+                    </div>
+                    <div style={{ color: '#94a3b8', fontSize: '12px', lineHeight: 1.4 }}>
+                      {persona.desc}
+                    </div>
+                  </div>
+                  <div style={{ color: '#a78bfa', fontSize: '18px' }}>→</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Loading State */}
+            {viewDocsLoading && (
+              <div style={{
+                marginTop: '20px',
+                padding: '16px',
+                background: 'rgba(139, 92, 246, 0.1)',
+                borderRadius: '12px',
+                border: '1px solid rgba(139, 92, 246, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}>
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  border: '2px solid rgba(139, 92, 246, 0.3)',
+                  borderTop: '2px solid #a78bfa',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }} />
+                <span style={{ color: '#a78bfa', fontSize: '13px', fontWeight: 500 }}>
+                  Generating AI documentation...
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Global Styles */}

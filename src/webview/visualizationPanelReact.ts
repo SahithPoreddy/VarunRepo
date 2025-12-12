@@ -188,7 +188,11 @@ export class VisualizationPanelReact {
       const config = vscode.workspace.getConfiguration('codebaseVisualizer');
       await config.update('litellm.apiKey', apiKey, vscode.ConfigurationTarget.Global);
       
-      vscode.window.showInformationMessage('✅ API Key configured successfully!');
+      // Reinitialize the LiteLLM service with new API key
+      const { getLiteLLMService } = await import('../llm/litellmService');
+      getLiteLLMService().reinitialize();
+      
+      vscode.window.showInformationMessage('✅ API Key configured successfully! You can now generate AI-powered documentation.');
       this.sendApiKeyStatus();
     }
   }
@@ -203,23 +207,28 @@ export class VisualizationPanelReact {
     this.panel?.webview.postMessage({ command: 'docsGenerationStarted' });
 
     try {
+      // Reinitialize LiteLLM to pick up any newly configured API key
+      const { getLiteLLMService } = await import('../llm/litellmService');
+      getLiteLLMService().reinitialize();
+      
       // Import the codebase doc generator
       const { CodebaseDocGenerator } = await import('../documentation/codebaseDocGenerator');
       const docGenerator = new CodebaseDocGenerator();
       
-      // Check if API key is available
+      // STRICTLY require API key - no fallback to rule-based
       if (!docGenerator.isLLMAvailable()) {
-        const shouldConfigure = await vscode.window.showWarningMessage(
-          'API key not configured. Documentation will use rule-based generation instead of AI.',
+        this.panel?.webview.postMessage({ command: 'docsGenerationError' });
+        
+        const action = await vscode.window.showErrorMessage(
+          '🔑 API Key Required: AI-powered documentation requires a valid API key. Please configure your OpenAI or LiteLLM API key to generate comprehensive, persona-specific documentation.',
           'Configure API Key',
-          'Continue Anyway'
+          'Cancel'
         );
         
-        if (shouldConfigure === 'Configure API Key') {
+        if (action === 'Configure API Key') {
           await this.handleConfigureApiKey();
-          this.panel?.webview.postMessage({ command: 'docsGenerationError' });
-          return;
         }
+        return;
       }
 
       // Get workspace folder

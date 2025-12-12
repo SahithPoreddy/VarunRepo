@@ -168,8 +168,17 @@ export class CodebaseDocGenerator {
     this.docsFolder = path.join(this.workspaceRoot, '.doc_sync');
     this.nodesFolder = path.join(this.docsFolder, 'nodes');
     this.graphFolder = path.join(this.docsFolder, 'graph');
+    
+    // Reinitialize LiteLLM to ensure we have latest API key
+    this.litellm = getLiteLLMService();
+    
     this.useLLM = useAI && this.litellm.isReady();
     this.useAgent = useAI && this.agent.isReady();
+
+    // If AI was requested but not available, throw an error
+    if (useAI && !this.useLLM && !this.useAgent) {
+      throw new Error('AI documentation generation requires a valid API key. Please configure your OpenAI or LiteLLM API key.');
+    }
 
     // Show progress notification with persona
     const personaLabel = persona.charAt(0).toUpperCase() + persona.slice(1).replace('-', ' ');
@@ -220,8 +229,8 @@ export class CodebaseDocGenerator {
       }
     }
 
-    // Generate documentation for each component
-    // Priority: Agent > LLM > Rule-based
+    // Generate documentation for each component using AI only
+    // Priority: Agent > LLM (no rule-based fallback)
     let componentDocs: ComponentDoc[];
     
     if (nodesToProcess.length === 0) {
@@ -236,10 +245,8 @@ export class CodebaseDocGenerator {
       const newDocs = await this.generateComponentDocsWithLLM(nodesToProcess, edges);
       componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
     } else {
-      const newDocs = nodesToProcess.map(node => 
-        this.generateComponentDoc(node, edges, nodes)
-      );
-      componentDocs = [...Array.from(existingDocs.values()), ...newDocs];
+      // This should never happen as we check for AI availability above
+      throw new Error('AI documentation generation requires a valid API key.');
     }
 
     // Analyze architecture

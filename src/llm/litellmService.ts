@@ -78,6 +78,13 @@ export class LiteLLMService {
   }
 
   /**
+   * Reinitialize the service (call after API key is configured)
+   */
+  reinitialize(): void {
+    this.initialize();
+  }
+
+  /**
    * Prompt user to configure LiteLLM
    */
   async promptForConfiguration(): Promise<boolean> {
