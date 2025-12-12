@@ -292,7 +292,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function showVisualization(context: vscode.ExtensionContext, useAI: boolean = false) {
   logger.log('\n' + '='.repeat(80));
-  logger.log('showVisualization command triggered', { useAI });
+  logger.log('showVisualization command triggered');
   
   const workspaceFolders = vscode.workspace.workspaceFolders;
   
@@ -305,18 +305,11 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
   const workspaceUri = workspaceFolders[0].uri;
   logger.log('Workspace folder', { path: workspaceUri.fsPath });
 
-  // Check if LiteLLM is available when useAI is requested
-  const litellm = getLiteLLMService();
-  const llmEnabled = useAI && litellm.isReady();
-  if (useAI && !litellm.isReady()) {
-    logger.log('LiteLLM not configured, using rule-based documentation');
-  }
-
   // Show progress
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: llmEnabled ? 'Analyzing Codebase with AI' : 'Analyzing Codebase',
+      title: 'Analyzing Codebase',
       cancellable: false
     },
     async (progress) => {
@@ -333,20 +326,19 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
         throw error;
       }
 
-      progress.report({ increment: 30, message: llmEnabled ? 'Generating AI documentation...' : 'Generating documentation...' });
+      progress.report({ increment: 30, message: 'Generating documentation...' });
       
-      // Generate codebase documentation
+      // Generate codebase documentation with AST only (centralized data in .doc_sync)
+      // This creates the foundation that View Docs and Ask AI will use
       let documentation;
       try {
-        documentation = await docGenerator.generateCodebaseDocs(analysisResult, workspaceUri, llmEnabled);
-        const llmStatus = documentation.generatedWithLLM ? '🤖 AI-powered' : '📝 Rule-based';
-        logger.log('Documentation generated', { 
+        documentation = await docGenerator.generateCodebaseDocsWithAST(analysisResult, workspaceUri, false);
+        logger.log('Documentation generated with AST', { 
           folder: docGenerator.getDocsFolder(),
-          components: documentation.components.length,
-          generatedWithLLM: documentation.generatedWithLLM
+          components: documentation.components.length
         });
         vscode.window.showInformationMessage(
-          `📚 ${llmStatus} documentation generated in .doc_sync folder (${documentation.components.length} components)`
+          `📚 Codebase scanned: ${documentation.components.length} components indexed in .doc_sync`
         );
       } catch (error) {
         logger.error('Documentation generation failed', error);
@@ -429,12 +421,12 @@ async function refreshVisualization() {
   const analysisResult = await workspaceAnalyzer.analyze(workspaceFolders[0].uri);
   visualizationPanel.updateGraph(analysisResult);
   
-  // Also regenerate documentation for the updated graph
+  // Also regenerate documentation with AST (centralized data store)
   try {
-    await docGenerator.generateCodebaseDocs(
+    await docGenerator.generateCodebaseDocsWithAST(
       analysisResult,
       workspaceFolders[0].uri,
-      false // Use rule-based for auto-refresh (faster)
+      true // Force regenerate to capture changes
     );
     // Notify panel to reload docs
     visualizationPanel.reloadDocs();

@@ -203,8 +203,8 @@ export class VisualizationPanelReact {
 
   /**
    * Handle View Docs with Persona - 
-   * 1. Uses AST parsers to scan repo and save to .doc_sync (no LLM)
-   * 2. Uses LLM only for RAG/Ask AI and persona overview display
+   * .doc_sync is updated during graph initialization and sync, so View Docs just reads from it
+   * Uses LLM only for persona overview display (on-demand)
    */
   private async handleViewDocsWithPersona(
     persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst',
@@ -215,41 +215,19 @@ export class VisualizationPanelReact {
       const litellm = getLiteLLMService();
       litellm.reinitialize();
 
-      // Step 1: Generate documentation using AST parsers only (no LLM)
-      // This scans the entire repo and stores information in JSON files
-      if (this.currentAnalysis) {
-        const { CodebaseDocGenerator } = await import('../documentation/codebaseDocGenerator');
-        const docGenerator = new CodebaseDocGenerator();
-        
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-          // Generate documentation with AST only (NO LLM - fast and doesn't require API key)
-          const documentation = await docGenerator.generateCodebaseDocsWithAST(
-            this.currentAnalysis,
-            workspaceFolders[0].uri,
-            false // Don't force regenerate if cache exists
-          );
-          
-          // Step 2: Index for RAG so Ask AI works (this enables LLM-powered Q&A)
-          if (this.ragService) {
-            const ragChunks = docGenerator.generateRAGChunks(documentation);
-            await this.ragService.indexDocuments(ragChunks);
-            console.log('RAG indexed:', ragChunks.length, 'chunks');
-          } else {
-            // Initialize RAG if not available
-            const { RAGService } = await import('../rag/ragService');
-            this.ragService = new RAGService();
-            await this.ragService.initialize(workspaceFolders[0].uri);
-            const ragChunks = docGenerator.generateRAGChunks(documentation);
-            await this.ragService.indexDocuments(ragChunks);
-            console.log('RAG initialized and indexed:', ragChunks.length, 'chunks');
-          }
-          
-          // Note: Don't call loadAndSendDocs() here - we want to show LLM persona docs directly
+      // Ensure RAG is initialized with existing docs from .doc_sync
+      // (docs are already generated during graph initialization/sync)
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        if (!this.ragService) {
+          const { RAGService } = await import('../rag/ragService');
+          this.ragService = new RAGService();
+          await this.ragService.initialize(workspaceFolders[0].uri);
+          console.log('RAG initialized from existing .doc_sync');
         }
       }
 
-      // Step 3: Generate persona-specific overview using LLM (only LLM call for View Docs display)
+      // Generate persona-specific overview using LLM (only LLM call for View Docs)
       if (litellm.isReady()) {
         const content = await litellm.generatePersonaOverview(codebaseSummary, persona);
         
@@ -422,7 +400,8 @@ export class VisualizationPanelReact {
   }
 
   /**
-   * Regenerate documentation after sync changes (lightweight, no AI by default)
+   * Regenerate documentation after sync changes using AST only (no LLM)
+   * This updates .doc_sync folder which is the centralized data store
    */
   private async regenerateDocsAfterSync() {
     if (!this.currentAnalysis) return;
@@ -434,17 +413,21 @@ export class VisualizationPanelReact {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders || workspaceFolders.length === 0) return;
       
-      // Generate docs without AI for speed (rule-based only)
-      await docGenerator.generateCodebaseDocs(
+      // Generate docs with AST only (fast, no API key needed)
+      const documentation = await docGenerator.generateCodebaseDocsWithAST(
         this.currentAnalysis,
         workspaceFolders[0].uri,
-        false // Don't use AI for auto-sync - faster
+        true // Force regenerate to capture changes
       );
       
-      // Reload and send updated docs to webview
-      await this.loadAndSendDocs();
+      // Re-index RAG with updated docs
+      if (this.ragService) {
+        const ragChunks = docGenerator.generateRAGChunks(documentation);
+        await this.ragService.indexDocuments(ragChunks);
+        console.log('RAG re-indexed after sync:', ragChunks.length, 'chunks');
+      }
       
-      console.log('Documentation regenerated after sync');
+      console.log('Documentation regenerated after sync (AST-only)');
     } catch (error) {
       console.error('Failed to regenerate docs after sync:', error);
       // Don't show error to user - docs regeneration is secondary
