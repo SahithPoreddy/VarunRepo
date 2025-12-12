@@ -2512,19 +2512,18 @@ const App = () => {
           break;
 
         case 'docsLoaded':
-          // Receive docs.json data for React rendering
+          // Receive docs.json data for React rendering (used for node details, not DocsPanel)
           if (message.docs) {
             console.log('Docs loaded:', Object.keys(message.docs.nodes || {}).length, 'nodes');
             setDocsData(message.docs);
             setDocsGenerated(true);
-            // Auto-show docs panel when loaded via View Docs flow
-            setShowDocsPanel(true);
             setViewDocsLoading(false);
+            // Don't auto-show panel - wait for LLM persona docs
           }
           break;
 
         case 'personaDocsReady':
-          // Receive LLM-formatted persona documentation
+          // Receive LLM-formatted persona documentation - NOW show the panel
           setPersonaFormattedDocs(message.content);
           setViewDocsLoading(false);
           setShowDocsPanel(true);
@@ -3138,8 +3137,8 @@ const App = () => {
         />
       )}
 
-      {/* Full Documentation Panel */}
-      {showDocsPanel && (docsData || personaFormattedDocs) && (
+      {/* Full Documentation Panel - Only show with LLM-generated persona docs */}
+      {showDocsPanel && personaFormattedDocs && (
         <DocsPanel
           docsData={docsData}
           personaFormattedDocs={personaFormattedDocs}
