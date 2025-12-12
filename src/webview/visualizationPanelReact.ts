@@ -245,8 +245,7 @@ export class VisualizationPanelReact {
             console.log('RAG initialized and indexed:', ragChunks.length, 'chunks');
           }
           
-          // Load and send docs to webview
-          await this.loadAndSendDocs();
+          // Note: Don't call loadAndSendDocs() here - we want to show LLM persona docs directly
         }
       }
 
