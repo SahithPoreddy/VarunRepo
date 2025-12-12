@@ -403,6 +403,7 @@ export class CodebaseDocGenerator {
 
   /**
    * Generate documentation for a single component using LiteLLM
+   * Uses persona-specific prompts for richer, more detailed documentation
    */
   private async generateComponentDocWithLLM(
     node: CodeNode,
@@ -415,22 +416,29 @@ export class CodebaseDocGenerator {
     // Enhance with LLM if available
     if (this.useLLM && this.litellm.isReady()) {
       try {
-        // Generate AI summary
-        const aiSummary = await this.litellm.generateSummary(node);
+        // Use the comprehensive persona-specific documentation generator
+        const personaDocs = await this.litellm.generatePersonaDocumentation(node, this.currentPersona);
         
-        // Generate technical details
+        // Also get technical details for additional metadata
         const aiDetails = await this.litellm.generateTechnicalDetails(node);
 
         return {
           ...baseDoc,
-          summary: aiSummary || baseDoc.summary,
-          aiSummary,
+          summary: personaDocs.summary || baseDoc.summary,
+          aiSummary: personaDocs.summary,
+          description: personaDocs.detailedDescription,
           aiPurpose: aiDetails?.purpose,
-          aiKeyFeatures: aiDetails?.keyFeatures,
-          aiComplexity: aiDetails?.complexity,
+          aiKeyFeatures: personaDocs.keyPoints || aiDetails?.keyFeatures,
+          aiComplexity: personaDocs.complexity || aiDetails?.complexity,
+          usageExamples: personaDocs.sampleCode ? [personaDocs.sampleCode] : undefined,
+          personaSpecific: {
+            [this.currentPersona]: personaDocs.personaInsights
+          } as Record<Persona, string>,
+          technicalDetails: personaDocs.detailedDescription || baseDoc.technicalDetails,
         };
       } catch (error) {
         console.error(`LLM enhancement failed for ${node.label}:`, error);
+        // Fall back to basic doc
         return baseDoc;
       }
     }
@@ -542,6 +550,7 @@ export class CodebaseDocGenerator {
 
   /**
    * Generate a comprehensive summary for a component
+   * Enhanced rule-based generation with more detailed output
    */
   private generateSummary(
     node: CodeNode,
@@ -550,53 +559,76 @@ export class CodebaseDocGenerator {
     patterns: string[]
   ): string {
     const parts: string[] = [];
+    const lineCount = node.endLine - node.startLine + 1;
+    const complexity = lineCount > 200 ? 'complex' : lineCount > 50 ? 'moderate' : 'simple';
 
-    // Type-specific description
+    // Type-specific description with more detail
     switch (node.type) {
       case 'component':
-        parts.push(`${node.label} is a React component that provides UI functionality.`);
+        parts.push(`**${node.label}** is a React component that provides UI functionality.`);
         if (node.props && node.props.length > 0) {
-          parts.push(`It accepts ${node.props.length} props: ${node.props.slice(0, 5).join(', ')}${node.props.length > 5 ? '...' : ''}.`);
+          parts.push(`\n\n**Props** (${node.props.length}): ${node.props.slice(0, 8).join(', ')}${node.props.length > 8 ? '...' : ''}.`);
         }
         if (node.hooks && node.hooks.length > 0) {
-          parts.push(`Uses React hooks: ${node.hooks.join(', ')}.`);
+          parts.push(`\n\n**React Hooks Used**: ${node.hooks.join(', ')}.`);
         }
+        parts.push(`\n\nThis is a ${complexity} component with ${lineCount} lines of code.`);
         break;
       case 'class':
-        parts.push(`${node.label} is a ${node.language} class that encapsulates related functionality.`);
+        parts.push(`**${node.label}** is a ${node.language} class that encapsulates related functionality and data.`);
+        parts.push(`\n\nThis ${complexity} class contains ${lineCount} lines of code and provides a structured approach to organize related methods and properties.`);
+        if (node.visibility) {
+          parts.push(` It has ${node.visibility} visibility.`);
+        }
         break;
       case 'function':
-        parts.push(`${node.label} is a utility function.`);
+        parts.push(`**${node.label}** is a ${node.isAsync ? 'asynchronous ' : ''}utility function that performs a specific operation.`);
         if (node.parameters && node.parameters.length > 0) {
-          parts.push(`Takes ${node.parameters.length} parameter(s): ${node.parameters.map(p => p.name).join(', ')}.`);
+          parts.push(`\n\n**Parameters** (${node.parameters.length}):\n${node.parameters.map(p => `- \`${p.name}\`: ${p.type || 'any'}${p.optional ? ' (optional)' : ''}`).join('\n')}`);
         }
         if (node.returnType) {
-          parts.push(`Returns: ${node.returnType}.`);
+          parts.push(`\n\n**Returns**: \`${node.returnType}\``);
         }
+        parts.push(`\n\nThis is a ${complexity} function with ${lineCount} lines of code.`);
         break;
       case 'method':
-        parts.push(`${node.label} is a method that performs a specific operation.`);
+        parts.push(`**${node.label}** is a ${node.isStatic ? 'static ' : ''}${node.isAsync ? 'async ' : ''}method that performs a specific operation within its class.`);
+        if (node.parameters && node.parameters.length > 0) {
+          parts.push(`\n\n**Parameters**: ${node.parameters.map(p => `\`${p.name}: ${p.type || 'any'}\``).join(', ')}`);
+        }
+        if (node.returnType) {
+          parts.push(`\n\n**Returns**: \`${node.returnType}\``);
+        }
         break;
       default:
-        parts.push(`${node.label} is a ${node.type} in the codebase.`);
+        parts.push(`**${node.label}** is a ${node.type} in the codebase located at \`${path.basename(node.filePath)}\`.`);
+        parts.push(`\n\nIt contains ${lineCount} lines of ${node.language} code.`);
     }
 
-    // Dependencies info
+    // Dependencies info with more context
     if (dependencies.length > 0) {
-      parts.push(`Depends on: ${dependencies.slice(0, 5).join(', ')}${dependencies.length > 5 ? ` and ${dependencies.length - 5} more` : ''}.`);
+      parts.push(`\n\n**Dependencies** (${dependencies.length}): This ${node.type} imports or uses: ${dependencies.slice(0, 6).join(', ')}${dependencies.length > 6 ? `, and ${dependencies.length - 6} more` : ''}.`);
     }
 
-    // Dependents info
+    // Dependents info with more context
     if (dependents.length > 0) {
-      parts.push(`Used by: ${dependents.slice(0, 5).join(', ')}${dependents.length > 5 ? ` and ${dependents.length - 5} more` : ''}.`);
+      parts.push(`\n\n**Used By** (${dependents.length}): This ${node.type} is imported by: ${dependents.slice(0, 6).join(', ')}${dependents.length > 6 ? `, and ${dependents.length - 6} more` : ''}.`);
     }
 
-    // Patterns detected
+    // Patterns detected with explanations
     if (patterns.length > 0) {
-      parts.push(`Implements patterns: ${patterns.join(', ')}.`);
+      parts.push(`\n\n**Patterns Detected**: ${patterns.join(', ')}. These patterns indicate well-structured code following established software design principles.`);
     }
 
-    return parts.join(' ');
+    // Entry point indicator
+    if (node.isEntryPoint) {
+      parts.push(`\n\n⚡ **Entry Point**: This is an entry point of the application.`);
+    }
+    if (node.isPrimaryEntry) {
+      parts.push(` It is the **primary entry point**.`);
+    }
+
+    return parts.join('');
   }
 
   /**

@@ -655,10 +655,13 @@ export class VisualizationPanelReact {
    * Handle Q&A questions from the webview
    */
   private async handleAskQuestion(question: string) {
+    console.log('handleAskQuestion called with:', question);
+    
     if (!this.ragService) {
+      console.log('RAG service not available');
       this.panel?.webview.postMessage({
-        type: 'questionAnswer',
-        answer: 'RAG service is not available. Please analyze the workspace first.',
+        command: 'questionAnswer',
+        answer: 'RAG service is not available. Please analyze the workspace first by running "Analyze Codebase" command.',
         relevantNodes: [],
         confidence: 'low'
       });
@@ -667,17 +670,20 @@ export class VisualizationPanelReact {
 
     try {
       // Show loading state
+      console.log('Sending loading state...');
       this.panel?.webview.postMessage({
-        type: 'questionLoading',
+        command: 'questionLoading',
         loading: true
       });
 
       // Get answer from RAG service
+      console.log('Calling RAG service...');
       const result = await this.ragService.answerQuestion(question);
+      console.log('RAG service returned:', result.answer?.substring(0, 100));
 
       // Send answer back to webview
       this.panel?.webview.postMessage({
-        type: 'questionAnswer',
+        command: 'questionAnswer',
         answer: result.answer,
         relevantNodes: result.relevantNodes,
         confidence: result.confidence
@@ -685,7 +691,7 @@ export class VisualizationPanelReact {
     } catch (error) {
       console.error('Error answering question:', error);
       this.panel?.webview.postMessage({
-        type: 'questionAnswer',
+        command: 'questionAnswer',
         answer: 'An error occurred while searching. Please try again.',
         relevantNodes: [],
         confidence: 'low'
@@ -738,6 +744,14 @@ export class VisualizationPanelReact {
 
   show() {
     this.panel?.reveal();
+  }
+
+  /**
+   * Update the RAG service (useful when panel is reused)
+   */
+  updateRagService(ragService: RAGService) {
+    this.ragService = ragService;
+    console.log('RAG service updated on visualization panel');
   }
 
   /**

@@ -627,6 +627,180 @@ const CustomNode = ({ data }: {
 
 const nodeTypes = { custom: CustomNode };
 
+// ============ API Key Configuration Modal ============
+const ApiKeyConfigModal = ({
+  onClose,
+  onConfigure,
+}: {
+  onClose: () => void;
+  onConfigure: () => void;
+}) => {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0, 0, 0, 0.8)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 3000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'fadeIn 0.2s ease',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+          borderRadius: '20px',
+          padding: '32px',
+          maxWidth: '480px',
+          width: '90%',
+          border: '1px solid rgba(100, 255, 218, 0.2)',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.5)',
+          animation: 'slideUp 0.3s ease',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div style={{
+          width: '72px',
+          height: '72px',
+          borderRadius: '20px',
+          background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.2) 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 20px',
+          border: '1px solid rgba(251, 191, 36, 0.3)',
+        }}>
+          <span style={{ fontSize: '36px' }}>🔑</span>
+        </div>
+
+        {/* Title */}
+        <h2 style={{
+          margin: '0 0 12px 0',
+          textAlign: 'center',
+          color: '#f1f5f9',
+          fontSize: '22px',
+          fontWeight: 600,
+        }}>
+          API Key Required
+        </h2>
+
+        {/* Description */}
+        <p style={{
+          margin: '0 0 24px 0',
+          textAlign: 'center',
+          color: '#94a3b8',
+          fontSize: '14px',
+          lineHeight: 1.6,
+        }}>
+          To use <strong style={{ color: '#64ffda' }}>AI-powered documentation</strong>, <strong style={{ color: '#64ffda' }}>RAG search</strong>, and <strong style={{ color: '#64ffda' }}>intelligent answers</strong>, you need to configure an API key.
+        </p>
+
+        {/* Features List */}
+        <div style={{
+          background: 'rgba(100, 255, 218, 0.05)',
+          borderRadius: '12px',
+          padding: '16px',
+          marginBottom: '24px',
+          border: '1px solid rgba(100, 255, 218, 0.1)',
+        }}>
+          <p style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Features Unlocked with API Key
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {[
+              { icon: '📝', text: 'AI-Generated Documentation', desc: 'Rich, detailed docs for all code components' },
+              { icon: '🧠', text: 'Intelligent RAG Answers', desc: 'Ask questions and get smart, context-aware answers' },
+              { icon: '📚', text: 'View Full Docs Panel', desc: 'Browse comprehensive project documentation' },
+              { icon: '🎭', text: 'Persona-Based Views', desc: 'Developer, Architect, PM, and BA perspectives' },
+            ].map((feature, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '16px' }}>{feature.icon}</span>
+                <div>
+                  <span style={{ color: '#e2e8f0', fontSize: '13px', fontWeight: 500 }}>{feature.text}</span>
+                  <p style={{ margin: '2px 0 0 0', color: '#64748b', fontSize: '11px' }}>{feature.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Supported Providers */}
+        <div style={{
+          background: 'rgba(139, 92, 246, 0.05)',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          marginBottom: '24px',
+          border: '1px solid rgba(139, 92, 246, 0.1)',
+        }}>
+          <p style={{ margin: '0 0 8px 0', color: '#a78bfa', fontSize: '11px', fontWeight: 600 }}>
+            Supported Providers
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {['OpenAI', 'Anthropic', 'Azure OpenAI', 'LiteLLM Proxy', 'Ollama'].map((provider, i) => (
+              <span
+                key={i}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  color: '#c4b5fd',
+                  fontSize: '11px',
+                }}
+              >
+                {provider}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1,
+              padding: '14px 20px',
+              borderRadius: '12px',
+              border: '1px solid rgba(100, 116, 139, 0.3)',
+              background: 'rgba(100, 116, 139, 0.1)',
+              color: '#94a3b8',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            Maybe Later
+          </button>
+          <button
+            onClick={onConfigure}
+            style={{
+              flex: 1,
+              padding: '14px 20px',
+              borderRadius: '12px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #64ffda 0%, #38bdf8 100%)',
+              color: '#0f172a',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: '0 4px 15px rgba(100, 255, 218, 0.3)',
+            }}
+          >
+            🔑 Configure API Key
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ============ Full Documentation Panel - Right Side Slide ============
 const DocsPanel = ({
   docsData,
@@ -646,13 +820,88 @@ const DocsPanel = ({
   onNodeClick: (nodeId: string) => void;
   persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst';
 }) => {
-  const [activeSection, setActiveSection] = useState<'overview' | 'components' | 'architecture'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [expandedNode, setExpandedNode] = useState<string | null>(null);
 
   const nodeList = Object.values(docsData.nodes || {});
   const nodeTypes = Array.from(new Set(nodeList.map((n: any) => n.type)));
+
+  // Get persona-specific content for a node
+  const getPersonaContent = (node: any) => {
+    switch (persona) {
+      case 'developer':
+        return {
+          primary: node.aiDescription || node.aiSummary || 'No description available',
+          secondary: node.technicalDetails || '',
+          badge: node.aiComplexity || 'medium',
+          badgeLabel: 'Complexity',
+          focusFields: ['signature', 'dependencies', 'codeSnippet'],
+        };
+      case 'architect':
+        return {
+          primary: node.technicalDetails || node.aiSummary || 'No architecture details',
+          secondary: (node.patterns || []).join(', ') || 'No patterns detected',
+          badge: node.type,
+          badgeLabel: 'Type',
+          focusFields: ['patterns', 'layers', 'dependencies'],
+        };
+      case 'product-manager':
+        return {
+          primary: node.aiSummary || 'No summary available',
+          secondary: (node.aiKeyFeatures || []).slice(0, 3).join(' • ') || 'No features listed',
+          badge: node.type === 'function' ? 'Feature' : node.type === 'class' ? 'Module' : 'Component',
+          badgeLabel: 'Category',
+          focusFields: ['aiKeyFeatures', 'aiSummary'],
+        };
+      case 'business-analyst':
+        return {
+          primary: node.aiSummary || 'No business context',
+          secondary: `Located in ${node.relativePath || node.filePath || 'unknown location'}`,
+          badge: node.type,
+          badgeLabel: 'Asset Type',
+          focusFields: ['aiSummary', 'relativePath'],
+        };
+      default:
+        return {
+          primary: node.aiSummary || 'No description',
+          secondary: '',
+          badge: node.type,
+          badgeLabel: 'Type',
+          focusFields: [],
+        };
+    }
+  };
+
+  // Persona-specific overview content
+  const getPersonaOverview = () => {
+    switch (persona) {
+      case 'developer':
+        return {
+          title: '💻 Technical Overview',
+          description: 'Detailed technical documentation for developers including code structure, dependencies, and implementation details.',
+        };
+      case 'architect':
+        return {
+          title: '🏗️ Architecture Overview',
+          description: 'High-level system architecture, design patterns, and component relationships for architectural decision-making.',
+        };
+      case 'product-manager':
+        return {
+          title: '📋 Product Overview',
+          description: 'Feature-focused documentation highlighting capabilities, modules, and user-facing functionality.',
+        };
+      case 'business-analyst':
+        return {
+          title: '📊 Business Overview',
+          description: 'Business context and asset inventory for stakeholder communication and requirement mapping.',
+        };
+      default:
+        return {
+          title: '📚 Project Overview',
+          description: 'General project documentation.',
+        };
+    }
+  };
 
   // Filter nodes based on search and type
   const filteredNodes = nodeList.filter((node: any) => {
@@ -688,7 +937,7 @@ const DocsPanel = ({
         top: 0,
         right: 0,
         bottom: 0,
-        width: '550px',
+        width: '600px',
         background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
         borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
         zIndex: 1100,
@@ -709,8 +958,8 @@ const DocsPanel = ({
       }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            📚 {docsData.projectName} Docs
-            {docsData.generatedWithAI && (
+            📚 {docsData.projectName} Documentation
+            {docsData.generatedWithAI ? (
               <span style={{
                 background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
                 color: '#0f172a',
@@ -719,12 +968,26 @@ const DocsPanel = ({
                 fontSize: '10px',
                 fontWeight: 700,
               }}>
-                AI
+                🤖 AI Generated
+              </span>
+            ) : (
+              <span style={{
+                background: 'rgba(251, 191, 36, 0.2)',
+                color: '#fbbf24',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'help',
+              }}
+              title="Configure API key for AI-powered documentation"
+              >
+                📝 Basic (No API Key)
               </span>
             )}
           </h2>
           <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }}>
-            {personaLabels[persona]} • {nodeList.length} components
+            {personaLabels[persona]} View • {nodeList.length} components
           </p>
         </div>
         <button
@@ -747,234 +1010,297 @@ const DocsPanel = ({
         </button>
       </div>
 
-      {/* Navigation Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
-        background: '#0f172a',
-        padding: '0 16px',
-      }}>
-        {[
-          { id: 'overview', label: '📋 Overview' },
-          { id: 'components', label: '🧩 Components' },
-          { id: 'architecture', label: '🏗️ Architecture' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSection(tab.id as any)}
-            style={{
-              padding: '10px 14px',
-              border: 'none',
-              background: activeSection === tab.id ? 'rgba(100, 255, 218, 0.1)' : 'transparent',
-              color: activeSection === tab.id ? '#64ffda' : '#94a3b8',
-              cursor: 'pointer',
-              fontSize: '12px',
-              fontWeight: 500,
-              borderBottom: activeSection === tab.id ? '2px solid #64ffda' : '2px solid transparent',
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
+      {/* Unified Content - Single Scrollable Overview */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-        {/* Overview Section */}
-        {activeSection === 'overview' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{
-              background: 'rgba(100, 255, 218, 0.05)',
-              padding: '16px',
-              borderRadius: '10px',
-              border: '1px solid rgba(100, 255, 218, 0.2)',
-            }}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#64ffda', fontSize: '14px' }}>
-                Project Overview
-              </h3>
-              <div
-                className="markdown-content"
-                style={{ color: '#e2e8f0', lineHeight: 1.7, fontSize: '13px' }}
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture?.overview || 'No overview available.') }}
-              />
-            </div>
-
-            {/* Stats */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '10px',
-            }}>
-              <div style={{
-                background: '#1e293b',
-                padding: '12px',
-                borderRadius: '8px',
-                textAlign: 'center',
-              }}>
-                <div style={{ color: '#64ffda', fontSize: '20px', fontWeight: 600 }}>{nodeList.length}</div>
-                <div style={{ color: '#94a3b8', fontSize: '11px' }}>Components</div>
-              </div>
-              <div style={{
-                background: '#1e293b',
-                padding: '12px',
-                borderRadius: '8px',
-                textAlign: 'center',
-              }}>
-                <div style={{ color: '#a78bfa', fontSize: '20px', fontWeight: 600 }}>{nodeTypes.length}</div>
-                <div style={{ color: '#94a3b8', fontSize: '11px' }}>Types</div>
-              </div>
+        {/* Warning Banner if No AI */}
+        {!docsData.generatedWithAI && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(245, 158, 11, 0.1) 100%)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            borderRadius: '12px',
+            padding: '14px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}>
+            <span style={{ fontSize: '20px' }}>🔑</span>
+            <div>
+              <p style={{ margin: '0 0 6px 0', color: '#fbbf24', fontSize: '13px', fontWeight: 600 }}>
+                Basic Documentation Mode
+              </p>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px', lineHeight: 1.5 }}>
+                This documentation was generated without AI. For richer, more detailed docs with insights and examples, 
+                configure an API key and regenerate.
+              </p>
             </div>
           </div>
         )}
 
-        {/* Components Section */}
-        {activeSection === 'components' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Search */}
-            <input
-              type="text"
-              placeholder="Search components..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                padding: '10px 12px',
-                borderRadius: '8px',
-                border: '1px solid rgba(100, 255, 218, 0.2)',
-                background: 'rgba(15, 23, 42, 0.8)',
-                color: '#e2e8f0',
-                fontSize: '12px',
-                outline: 'none',
-              }}
-            />
+        {/* Persona-Specific Header */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
+          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(100, 255, 218, 0.3)',
+          marginBottom: '16px',
+        }}>
+          <h3 style={{ margin: '0 0 8px 0', color: '#64ffda', fontSize: '16px' }}>
+            {getPersonaOverview().title}
+          </h3>
+          <p style={{ margin: 0, color: '#e2e8f0', fontSize: '12px', lineHeight: 1.6 }}>
+            {getPersonaOverview().description}
+          </p>
+        </div>
 
-            {/* Type Filter */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setSelectedType('all')}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: selectedType === 'all' ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
-                  color: selectedType === 'all' ? '#0f172a' : '#64ffda',
-                  fontSize: '10px',
-                  cursor: 'pointer',
-                }}
-              >
-                All
-              </button>
-              {nodeTypes.map((type: string) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: selectedType === type ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
-                    color: selectedType === type ? '#0f172a' : '#64ffda',
-                    fontSize: '10px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {type}
-                </button>
+        {/* Project Overview Section */}
+        <div style={{
+          background: 'rgba(100, 255, 218, 0.05)',
+          padding: '16px',
+          borderRadius: '10px',
+          border: '1px solid rgba(100, 255, 218, 0.2)',
+          marginBottom: '16px',
+        }}>
+          <h3 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            📊 Project Summary
+          </h3>
+          <div
+            className="markdown-content"
+            style={{ color: '#e2e8f0', lineHeight: 1.7, fontSize: '13px' }}
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture?.overview || 'No overview available. Configure an API key in settings for AI-generated documentation.') }}
+          />
+        </div>
+
+        {/* Quick Stats */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px',
+          marginBottom: '16px',
+        }}>
+          <div style={{
+            background: '#1e293b',
+            padding: '14px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            border: '1px solid rgba(100, 255, 218, 0.1)',
+          }}>
+            <div style={{ color: '#64ffda', fontSize: '24px', fontWeight: 700 }}>{nodeList.length}</div>
+            <div style={{ color: '#94a3b8', fontSize: '11px' }}>Components</div>
+          </div>
+          <div style={{
+            background: '#1e293b',
+            padding: '14px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            border: '1px solid rgba(139, 92, 246, 0.1)',
+          }}>
+            <div style={{ color: '#a78bfa', fontSize: '24px', fontWeight: 700 }}>{nodeTypes.length}</div>
+            <div style={{ color: '#94a3b8', fontSize: '11px' }}>Types</div>
+          </div>
+          <div style={{
+            background: '#1e293b',
+            padding: '14px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            border: '1px solid rgba(251, 191, 36, 0.1)',
+          }}>
+            <div style={{ color: '#fbbf24', fontSize: '24px', fontWeight: 700 }}>{docsData.architecture?.patterns?.length || 0}</div>
+            <div style={{ color: '#94a3b8', fontSize: '11px' }}>Patterns</div>
+          </div>
+        </div>
+
+        {/* Architecture Layers */}
+        {docsData.architecture?.layers?.length > 0 && (
+          <div style={{
+            background: '#1e293b',
+            padding: '16px',
+            borderRadius: '10px',
+            marginBottom: '16px',
+            border: '1px solid rgba(100, 255, 218, 0.1)',
+          }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '13px' }}>🏢 Architecture Layers</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {docsData.architecture.layers.slice(0, 8).map((layer: string, i: number) => (
+                <div key={i} style={{
+                  background: 'rgba(100, 255, 218, 0.08)',
+                  padding: '10px 14px',
+                  borderRadius: '6px',
+                  color: '#e2e8f0',
+                  fontSize: '12px',
+                  borderLeft: '3px solid #64ffda',
+                }}>
+                  {layer}
+                </div>
               ))}
             </div>
+          </div>
+        )}
 
-            {/* Component List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {filteredNodes.slice(0, 20).map((node: any, i: number) => (
+        {/* Design Patterns */}
+        {docsData.architecture?.patterns?.length > 0 && (
+          <div style={{
+            background: '#1e293b',
+            padding: '16px',
+            borderRadius: '10px',
+            marginBottom: '16px',
+            border: '1px solid rgba(139, 92, 246, 0.1)',
+          }}>
+            <h4 style={{ margin: '0 0 12px 0', color: '#a78bfa', fontSize: '13px' }}>🎯 Detected Patterns</h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {docsData.architecture.patterns.map((pattern: string, i: number) => (
+                <span key={i} style={{
+                  background: 'rgba(139, 92, 246, 0.15)',
+                  color: '#a78bfa',
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                }}>
+                  ✓ {pattern}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Component Search & List */}
+        <div style={{
+          background: '#1e293b',
+          padding: '16px',
+          borderRadius: '10px',
+          border: '1px solid rgba(100, 255, 218, 0.1)',
+        }}>
+          <h4 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '13px' }}>🧩 Components</h4>
+          
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="🔍 Search components..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(100, 255, 218, 0.2)',
+              background: 'rgba(15, 23, 42, 0.8)',
+              color: '#e2e8f0',
+              fontSize: '12px',
+              outline: 'none',
+              marginBottom: '10px',
+              boxSizing: 'border-box',
+            }}
+          />
+
+          {/* Type Filter */}
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+            <button
+              onClick={() => setSelectedType('all')}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '14px',
+                border: 'none',
+                background: selectedType === 'all' ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
+                color: selectedType === 'all' ? '#0f172a' : '#64ffda',
+                fontSize: '10px',
+                cursor: 'pointer',
+                fontWeight: 600,
+              }}
+            >
+              All ({nodeList.length})
+            </button>
+            {nodeTypes.map((type: string) => (
+              <button
+                key={type}
+                onClick={() => setSelectedType(type)}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: selectedType === type ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
+                  color: selectedType === type ? '#0f172a' : '#64ffda',
+                  fontSize: '10px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                {type} ({nodeList.filter((n: any) => n.type === type).length})
+              </button>
+            ))}
+          </div>
+
+          {/* Component List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflow: 'auto' }}>
+            {filteredNodes.slice(0, 30).map((node: any, i: number) => {
+              const personaContent = getPersonaContent(node);
+              return (
                 <div
                   key={i}
                   onClick={() => onNodeClick(node.id || node.name)}
                   style={{
-                    background: '#1e293b',
-                    padding: '12px',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    padding: '12px 14px',
                     borderRadius: '8px',
                     border: '1px solid rgba(100, 255, 218, 0.1)',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <span style={{ color: '#64ffda', fontWeight: 600, fontSize: '13px' }}>{node.name}</span>
                     <span style={{
-                      fontSize: '10px',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      background: 'rgba(100, 255, 218, 0.1)',
-                      color: '#64ffda',
+                      fontSize: '9px',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      background: personaContent.badge === 'high' ? 'rgba(239, 68, 68, 0.2)' :
+                                 personaContent.badge === 'low' ? 'rgba(34, 197, 94, 0.2)' :
+                                 'rgba(100, 255, 218, 0.1)',
+                      color: personaContent.badge === 'high' ? '#ef4444' :
+                             personaContent.badge === 'low' ? '#22c55e' : '#64ffda',
+                      fontWeight: 600,
                     }}>
-                      {node.type}
+                      {personaContent.badge}
                     </span>
                   </div>
-                  {node.aiSummary && (
-                    <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: '11px', lineHeight: 1.4 }}>
-                      {node.aiSummary.substring(0, 100)}...
+                  <p style={{ margin: '0 0 4px 0', color: '#e2e8f0', fontSize: '11px', lineHeight: 1.5 }}>
+                    {personaContent.primary.substring(0, 150)}{personaContent.primary.length > 150 ? '...' : ''}
+                  </p>
+                  {personaContent.secondary && (
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '10px', fontStyle: 'italic' }}>
+                      {personaContent.secondary.substring(0, 100)}{personaContent.secondary.length > 100 ? '...' : ''}
                     </p>
                   )}
                 </div>
-              ))}
-              {filteredNodes.length > 20 && (
-                <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '8px' }}>
-                  +{filteredNodes.length - 20} more components
-                </div>
-              )}
-            </div>
+              );
+            })}
+            {filteredNodes.length > 30 && (
+              <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '10px' }}>
+                +{filteredNodes.length - 30} more components • Use search to filter
+              </div>
+            )}
+            {filteredNodes.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', padding: '20px' }}>
+                No components match your search
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Architecture Section */}
-        {activeSection === 'architecture' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Layers */}
-            {docsData.architecture?.layers?.length > 0 && (
-              <div style={{
-                background: '#1e293b',
-                padding: '14px',
-                borderRadius: '10px',
-              }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#64ffda', fontSize: '13px' }}>🏢 Architecture Layers</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {docsData.architecture.layers.map((layer: string, i: number) => (
-                    <div key={i} style={{
-                      background: 'rgba(100, 255, 218, 0.1)',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '12px',
-                    }}>
-                      {layer}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Patterns */}
-            {docsData.architecture?.patterns?.length > 0 && (
-              <div style={{
-                background: '#1e293b',
-                padding: '14px',
-                borderRadius: '10px',
-              }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#a78bfa', fontSize: '13px' }}>🎯 Design Patterns</h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {docsData.architecture.patterns.map((pattern: string, i: number) => (
-                    <span key={i} style={{
-                      background: 'rgba(139, 92, 246, 0.2)',
-                      color: '#a78bfa',
-                      padding: '4px 10px',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                    }}>
-                      {pattern}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* AI Notice */}
+        {!docsData.generatedWithAI && (
+          <div style={{
+            background: 'rgba(251, 191, 36, 0.1)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            borderRadius: '10px',
+            padding: '14px',
+            marginTop: '16px',
+          }}>
+            <p style={{ margin: 0, color: '#fbbf24', fontSize: '11px', lineHeight: 1.6 }}>
+              ⚠️ <strong>Rule-Based Documentation</strong>: This documentation was generated using pattern matching. 
+              For richer, more detailed AI-generated docs, configure your API key in VS Code settings 
+              (codebaseVisualizer.litellm.apiKey).
+            </p>
           </div>
         )}
       </div>
@@ -1689,6 +2015,7 @@ const App = () => {
   } | null>(null);
   const [showDocsPanel, setShowDocsPanel] = useState(false);
   const [showCopilotPanel, setShowCopilotPanel] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<'developer' | 'product-manager' | 'architect' | 'business-analyst'>('developer');
   const [qaQuestion, setQaQuestion] = useState('');
   const [qaAnswer, setQaAnswer] = useState<{
@@ -2152,10 +2479,12 @@ const App = () => {
           break;
 
         case 'questionLoading':
+          console.log('questionLoading received:', message.loading);
           setQaLoading(message.loading);
           break;
 
         case 'questionAnswer':
+          console.log('questionAnswer received:', message.answer?.substring(0, 100));
           setQaLoading(false);
           setQaAnswer({
             answer: message.answer,
@@ -2280,13 +2609,36 @@ const App = () => {
     });
   }, []);
 
-  // Handle generate documentation with persona
+  // Handle generate documentation with persona - requires API key
   const handleGenerateDocs = useCallback(() => {
+    if (!apiKeyConfigured) {
+      setShowApiKeyModal(true);
+      return;
+    }
     vscode.postMessage({ command: 'generateDocs', persona: selectedPersona });
-  }, [selectedPersona]);
+  }, [selectedPersona, apiKeyConfigured]);
+
+  // Handle view docs - requires API key
+  const handleViewDocs = useCallback(() => {
+    if (!apiKeyConfigured) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    setShowDocsPanel(true);
+  }, [apiKeyConfigured]);
+
+  // Handle open Ask AI panel - requires API key  
+  const handleOpenAskAI = useCallback(() => {
+    if (!apiKeyConfigured) {
+      setShowApiKeyModal(true);
+      return;
+    }
+    setShowCopilotPanel(true);
+  }, [apiKeyConfigured]);
 
   // Handle configure API key
   const handleConfigureApiKey = useCallback(() => {
+    setShowApiKeyModal(false);
     vscode.postMessage({ command: 'configureApiKey' });
   }, []);
 
@@ -2462,6 +2814,31 @@ const App = () => {
                   gap: '10px',
                   alignItems: 'center',
                 }}>
+                  {/* API Key Status Indicator */}
+                  <button
+                    onClick={() => setShowApiKeyModal(true)}
+                    style={{
+                      background: apiKeyConfigured 
+                        ? 'rgba(16, 185, 129, 0.15)' 
+                        : 'rgba(251, 191, 36, 0.15)',
+                      border: `1px solid ${apiKeyConfigured ? 'rgba(16, 185, 129, 0.4)' : 'rgba(251, 191, 36, 0.4)'}`,
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      color: apiKeyConfigured ? '#10b981' : '#fbbf24',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s',
+                    }}
+                    title={apiKeyConfigured ? 'API key configured - Click to reconfigure' : 'Click to configure API key'}
+                  >
+                    <span style={{ fontSize: '14px' }}>{apiKeyConfigured ? '✓' : '🔑'}</span>
+                    {apiKeyConfigured ? 'API Ready' : 'Setup API'}
+                  </button>
+
                   {/* Persona Dropdown */}
                   <div style={{ position: 'relative' }}>
                     <select
@@ -2522,7 +2899,7 @@ const App = () => {
                       transition: 'all 0.2s ease',
                       boxShadow: isGeneratingDocs ? 'none' : '0 2px 8px rgba(100, 255, 218, 0.3)',
                     }}
-                    title={`Generate ${selectedPersona} documentation`}
+                    title={apiKeyConfigured ? `Generate ${selectedPersona} documentation` : 'Configure API key first'}
                   >
                     {isGeneratingDocs ? (
                       <>
@@ -2539,14 +2916,17 @@ const App = () => {
                     ) : docsGenerated ? (
                       <>✅ Regenerate</>
                     ) : (
-                      <>📝 Generate</>
+                      <>
+                        📝 Generate
+                        {!apiKeyConfigured && <span style={{ fontSize: '10px', marginLeft: '4px' }}>🔑</span>}
+                      </>
                     )}
                   </button>
 
                   {/* View Full Documentation Button */}
                   {docsData && (
                     <button
-                      onClick={() => setShowDocsPanel(true)}
+                      onClick={handleViewDocs}
                       style={{
                         background: 'linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%)',
                         border: 'none',
@@ -2562,9 +2942,10 @@ const App = () => {
                         transition: 'all 0.2s ease',
                         boxShadow: '0 2px 8px rgba(139, 92, 246, 0.3)',
                       }}
-                      title="View full project documentation"
+                      title={apiKeyConfigured ? 'View full project documentation' : 'Configure API key first'}
                     >
                       📚 View Docs
+                      {!apiKeyConfigured && <span style={{ fontSize: '10px', marginLeft: '4px' }}>🔑</span>}
                     </button>
                   )}
 
@@ -2656,16 +3037,29 @@ const App = () => {
         {/* Ask AI Button - Top Right - offset to avoid collision */}
         <Panel position="top-right">
           <button
-            onClick={() => setShowCopilotPanel(true)}
+            onClick={handleOpenAskAI}
             style={{
               ...styles.copilotButton,
-              marginRight: showCopilotPanel ? '460px' : '0',
+              marginRight: showCopilotPanel ? '500px' : '0',
               transition: 'margin-right 0.3s ease',
             }}
             title="Ask questions about the codebase"
           >
             <span style={{ fontSize: '16px' }}>✨</span>
             Ask AI
+            {!apiKeyConfigured && (
+              <span style={{
+                marginLeft: '6px',
+                background: 'rgba(251, 191, 36, 0.2)',
+                color: '#fbbf24',
+                padding: '2px 6px',
+                borderRadius: '8px',
+                fontSize: '9px',
+                fontWeight: 600,
+              }}>
+                🔑
+              </span>
+            )}
           </button>
         </Panel>
 
@@ -2715,216 +3109,323 @@ const App = () => {
           top: 0,
           right: 0,
           bottom: 0,
-          width: '450px',
-          background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
-          borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
+          width: '480px',
+          background: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
+          borderLeft: '1px solid rgba(100, 255, 218, 0.15)',
           zIndex: 2000,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.5)',
+          boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.6)',
           animation: 'slideInRight 0.3s ease',
         }}>
-          {/* Header */}
+          {/* Header - Glassmorphism style */}
           <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
+            padding: '20px 24px',
+            borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'rgba(100, 255, 218, 0.03)',
+            background: 'linear-gradient(180deg, rgba(100, 255, 218, 0.08) 0%, rgba(100, 255, 218, 0.02) 100%)',
+            backdropFilter: 'blur(10px)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '24px' }}>✨</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(100, 255, 218, 0.2)',
+              }}>
+                <span style={{ fontSize: '22px' }}>🧠</span>
+              </div>
               <div>
-                <h2 style={{ margin: 0, color: '#64ffda', fontSize: '16px', fontWeight: 600 }}>
-                  Codebase AI
+                <h2 style={{ margin: 0, color: '#f1f5f9', fontSize: '17px', fontWeight: 600 }}>
+                  Ask AI
                 </h2>
-                <p style={{ margin: '2px 0 0 0', color: '#64748b', fontSize: '11px' }}>
-                  Powered by RAG search
+                <p style={{ margin: '3px 0 0 0', color: '#64748b', fontSize: '12px' }}>
+                  ✨ AI-powered code assistant
                 </p>
               </div>
             </div>
             <button
               onClick={() => setShowCopilotPanel(false)}
               style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '6px',
-                padding: '6px 10px',
-                color: '#ef4444',
+                background: 'rgba(100, 116, 139, 0.15)',
+                border: '1px solid rgba(100, 116, 139, 0.2)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                color: '#94a3b8',
                 cursor: 'pointer',
-                fontSize: '12px',
+                fontSize: '13px',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                e.currentTarget.style.color = '#f87171';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'rgba(100, 116, 139, 0.15)';
+                e.currentTarget.style.borderColor = 'rgba(100, 116, 139, 0.2)';
+                e.currentTarget.style.color = '#94a3b8';
               }}
             >
-              ✕
+              Close
             </button>
           </div>
 
-          {/* Question Input */}
-          <div style={{ padding: '16px', borderBottom: '1px solid rgba(100, 255, 218, 0.1)' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                value={qaQuestion}
-                onChange={(e) => setQaQuestion(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && qaQuestion.trim() && !qaLoading) {
-                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
-                  }
-                }}
-                placeholder="Ask about your codebase..."
-                style={{
-                  flex: 1,
-                  padding: '12px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(100, 255, 218, 0.2)',
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  color: '#e2e8f0',
-                  fontSize: '13px',
-                  outline: 'none',
-                }}
-              />
-              <button
-                onClick={() => {
-                  if (qaQuestion.trim() && !qaLoading) {
-                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
-                  }
-                }}
-                disabled={!qaQuestion.trim() || qaLoading}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '10px',
-                  border: 'none',
-                  background: qaQuestion.trim() && !qaLoading
-                    ? 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)'
-                    : 'rgba(100, 116, 139, 0.3)',
-                  color: qaQuestion.trim() && !qaLoading ? '#0f172a' : '#64748b',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  cursor: qaQuestion.trim() && !qaLoading ? 'pointer' : 'not-allowed',
+          {/* Conversation Area */}
+          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+            {/* Welcome State */}
+            {!qaAnswer && !qaLoading && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                textAlign: 'center',
+                padding: '20px',
+              }}>
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  borderRadius: '24px',
+                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.15) 0%, rgba(56, 189, 248, 0.15) 100%)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                {qaLoading ? (
-                  <span style={{
-                    width: '14px',
-                    height: '14px',
-                    border: '2px solid rgba(100, 255, 218, 0.3)',
-                    borderTop: '2px solid #64ffda',
+                  justifyContent: 'center',
+                  marginBottom: '20px',
+                  border: '1px solid rgba(100, 255, 218, 0.2)',
+                }}>
+                  <span style={{ fontSize: '40px' }}>💬</span>
+                </div>
+                <h3 style={{ color: '#f1f5f9', margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600 }}>
+                  Ask About Your Code
+                </h3>
+                <p style={{ color: '#64748b', margin: '0 0 24px 0', fontSize: '13px', lineHeight: '1.6' }}>
+                  I can help you understand your codebase,<br />find specific components, and explain logic
+                </p>
+
+                {/* Suggested Questions */}
+                <div style={{ width: '100%', maxWidth: '320px' }}>
+                  <p style={{ color: '#475569', fontSize: '11px', margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Try asking
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {[
+                      '📦 What are the main components?',
+                      '🔗 How does the API layer work?',
+                      '🔐 Explain the authentication flow',
+                      '📊 List all services and their purposes',
+                    ].map((q, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          const cleanQ = q.replace(/^[\u{1F300}-\u{1F9FF}]\s+/u, '');
+                          setQaQuestion(cleanQ);
+                          vscode.postMessage({ command: 'askQuestion', question: cleanQ });
+                        }}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(100, 255, 218, 0.15)',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          color: '#cbd5e1',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                        }}
+                        onMouseOver={(e) => {
+                          e.currentTarget.style.background = 'rgba(100, 255, 218, 0.1)';
+                          e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.3)';
+                          e.currentTarget.style.color = '#64ffda';
+                        }}
+                        onMouseOut={(e) => {
+                          e.currentTarget.style.background = 'rgba(30, 41, 59, 0.6)';
+                          e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.15)';
+                          e.currentTarget.style.color = '#cbd5e1';
+                        }}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State */}
+            {qaLoading && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '60px 20px',
+              }}>
+                <div style={{
+                  width: '60px',
+                  height: '60px',
+                  position: 'relative',
+                  marginBottom: '24px',
+                }}>
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    border: '3px solid rgba(100, 255, 218, 0.1)',
+                    borderRadius: '50%',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    border: '3px solid transparent',
+                    borderTopColor: '#64ffda',
                     borderRadius: '50%',
                     animation: 'spin 1s linear infinite',
                   }} />
-                ) : (
-                  <>➤</>
-                )}
-              </button>
-            </div>
-
-            {/* Quick Questions */}
-            <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {[
-                'Main components',
-                'How does API work',
-                'List services',
-                'Auth flow',
-              ].map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    setQaQuestion(q);
-                    vscode.postMessage({ command: 'askQuestion', question: q });
-                  }}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(100, 255, 218, 0.15)',
-                    background: 'rgba(100, 255, 218, 0.05)',
-                    color: '#64ffda',
-                    fontSize: '11px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Answer Area */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-            {qaLoading ? (
-              <div style={{
-                textAlign: 'center',
-                color: '#64748b',
-                padding: '40px 16px',
-              }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  margin: '0 auto 16px',
-                  border: '3px solid rgba(100, 255, 218, 0.2)',
-                  borderTop: '3px solid #64ffda',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                }} />
-                <p style={{ margin: 0, fontSize: '13px', color: '#64ffda' }}>
-                  Searching codebase...
+                  <div style={{
+                    position: 'absolute',
+                    inset: '8px',
+                    border: '3px solid transparent',
+                    borderTopColor: '#38bdf8',
+                    borderRadius: '50%',
+                    animation: 'spin 1.5s linear infinite reverse',
+                  }} />
+                </div>
+                <p style={{ margin: 0, fontSize: '15px', color: '#f1f5f9', fontWeight: 500 }}>
+                  Analyzing your codebase...
                 </p>
-                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#475569' }}>
-                  Analyzing relevant code patterns
+                <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                  Searching through files and understanding context
                 </p>
               </div>
-            ) : qaAnswer ? (
-              <div>
-                {/* Confidence Badge */}
-                <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{
-                    padding: '3px 8px',
-                    borderRadius: '10px',
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    background: qaAnswer.confidence === 'high'
-                      ? 'rgba(16, 185, 129, 0.2)'
-                      : qaAnswer.confidence === 'medium'
-                        ? 'rgba(245, 158, 11, 0.2)'
-                        : 'rgba(239, 68, 68, 0.2)',
-                    color: qaAnswer.confidence === 'high'
-                      ? '#10b981'
-                      : qaAnswer.confidence === 'medium'
-                        ? '#f59e0b'
-                        : '#ef4444',
+            )}
+
+            {/* Answer Display */}
+            {qaAnswer && !qaLoading && (
+              <div style={{ animation: 'fadeIn 0.3s ease' }}>
+                {/* User Question Bubble */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{
+                    maxWidth: '85%',
+                    padding: '12px 16px',
+                    borderRadius: '16px 16px 4px 16px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    lineHeight: '1.5',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
                   }}>
-                    {qaAnswer.confidence === 'high' ? '✓ High' :
-                      qaAnswer.confidence === 'medium' ? '~ Medium' :
-                        '? Low'}
-                  </span>
+                    {qaQuestion || qaHistory[qaHistory.length - 1]?.question || 'Your question'}
+                  </div>
                 </div>
 
-                {/* Answer */}
-                <div
-                  className="markdown-content"
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(100, 255, 218, 0.1)',
-                    marginBottom: '16px',
-                    fontSize: '13px',
-                    lineHeight: '1.6',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
-                />
+                {/* AI Response */}
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  marginBottom: '16px',
+                }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    border: '1px solid rgba(100, 255, 218, 0.2)',
+                  }}>
+                    <span style={{ fontSize: '18px' }}>🧠</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    {/* Confidence & AI Badge */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '20px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: qaAnswer.confidence === 'high'
+                          ? 'rgba(16, 185, 129, 0.15)'
+                          : qaAnswer.confidence === 'medium'
+                            ? 'rgba(245, 158, 11, 0.15)'
+                            : 'rgba(239, 68, 68, 0.15)',
+                        color: qaAnswer.confidence === 'high'
+                          ? '#10b981'
+                          : qaAnswer.confidence === 'medium'
+                            ? '#f59e0b'
+                            : '#ef4444',
+                        border: `1px solid ${
+                          qaAnswer.confidence === 'high'
+                            ? 'rgba(16, 185, 129, 0.3)'
+                            : qaAnswer.confidence === 'medium'
+                              ? 'rgba(245, 158, 11, 0.3)'
+                              : 'rgba(239, 68, 68, 0.3)'
+                        }`,
+                      }}>
+                        {qaAnswer.confidence === 'high' ? '✓ High confidence' :
+                          qaAnswer.confidence === 'medium' ? '◐ Medium confidence' :
+                            '○ Low confidence'}
+                      </span>
+                    </div>
 
-                {/* Relevant Nodes */}
+                    {/* Answer Content */}
+                    <div
+                      className="markdown-content"
+                      style={{
+                        background: 'rgba(30, 41, 59, 0.6)',
+                        padding: '16px 18px',
+                        borderRadius: '4px 16px 16px 16px',
+                        border: '1px solid rgba(100, 255, 218, 0.1)',
+                        fontSize: '13px',
+                        lineHeight: '1.7',
+                        color: '#e2e8f0',
+                      }}
+                      dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
+                    />
+                  </div>
+                </div>
+
+                {/* Related Code Section */}
                 {qaAnswer.relevantNodes.length > 0 && (
-                  <div>
-                    <h4 style={{ color: '#64ffda', margin: '0 0 10px 0', fontSize: '12px', fontWeight: 600 }}>
-                      📍 Related Code
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {qaAnswer.relevantNodes.slice(0, 4).map((node, i) => (
+                  <div style={{
+                    marginTop: '20px',
+                    padding: '16px',
+                    borderRadius: '14px',
+                    background: 'rgba(30, 41, 59, 0.4)',
+                    border: '1px solid rgba(100, 255, 218, 0.1)',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '14px',
+                    }}>
+                      <span style={{ fontSize: '14px' }}>📍</span>
+                      <h4 style={{ color: '#94a3b8', margin: 0, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Related Code ({qaAnswer.relevantNodes.length})
+                      </h4>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {qaAnswer.relevantNodes.slice(0, 5).map((node, i) => (
                         <div
                           key={i}
                           onClick={() => {
@@ -2944,29 +3445,54 @@ const App = () => {
                             }
                           }}
                           style={{
-                            padding: '10px 12px',
-                            borderRadius: '8px',
-                            background: 'rgba(30, 41, 59, 0.8)',
-                            border: '1px solid rgba(100, 255, 218, 0.1)',
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background: 'rgba(15, 23, 42, 0.6)',
+                            border: '1px solid rgba(100, 255, 218, 0.08)',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(100, 255, 218, 0.08)';
+                            e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.2)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(15, 23, 42, 0.6)';
+                            e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.08)';
+                          }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ color: '#64ffda', fontWeight: 600, fontSize: '12px' }}>{node.name}</span>
+                            <span style={{ color: '#64ffda', fontWeight: 600, fontSize: '13px' }}>{node.name}</span>
                             <span style={{
                               fontSize: '10px',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
                               background: 'rgba(100, 255, 218, 0.1)',
                               color: '#64ffda',
+                              fontWeight: 500,
                             }}>
                               {node.type}
                             </span>
                           </div>
                           {node.filePath && (
-                            <div style={{ color: '#64748b', fontSize: '10px', marginTop: '4px' }}>
-                              📁 {node.filePath}
+                            <div style={{ color: '#64748b', fontSize: '11px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>📁</span> {node.filePath}
+                            </div>
+                          )}
+                          {node.score > 0 && (
+                            <div style={{
+                              marginTop: '6px',
+                              height: '3px',
+                              borderRadius: '2px',
+                              background: 'rgba(100, 255, 218, 0.1)',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                width: `${Math.min(100, node.score * 50)}%`,
+                                background: 'linear-gradient(90deg, #64ffda 0%, #38bdf8 100%)',
+                                borderRadius: '2px',
+                              }} />
                             </div>
                           )}
                         </div>
@@ -2974,64 +3500,171 @@ const App = () => {
                     </div>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div style={{
-                textAlign: 'center',
-                color: '#64748b',
-                padding: '40px 16px',
-              }}>
-                <div style={{ fontSize: '36px', marginBottom: '12px' }}>🤖</div>
-                <p style={{ margin: 0, fontSize: '13px' }}>
-                  Ask anything about your code
-                </p>
-                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#475569' }}>
-                  RAG-powered search finds relevant context
-                </p>
+
+                {/* Ask Another Button */}
+                <div style={{ marginTop: '20px', textAlign: 'center' }}>
+                  <button
+                    onClick={() => {
+                      setQaAnswer(null);
+                      setQaQuestion('');
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(100, 255, 218, 0.2)',
+                      background: 'rgba(100, 255, 218, 0.08)',
+                      color: '#64ffda',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'rgba(100, 255, 218, 0.15)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'rgba(100, 255, 218, 0.08)';
+                    }}
+                  >
+                    ✨ Ask Another Question
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
-          {/* History */}
-          {qaHistory.length > 0 && (
+          {/* Input Area - Fixed at bottom */}
+          <div style={{
+            padding: '16px 20px 20px',
+            borderTop: '1px solid rgba(100, 255, 218, 0.1)',
+            background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 1) 100%)',
+          }}>
+            {/* History Pills */}
+            {qaHistory.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {qaHistory.slice(-3).reverse().map((h, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        setQaQuestion(h.question);
+                        vscode.postMessage({ command: 'askQuestion', question: h.question });
+                      }}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '14px',
+                        border: '1px solid rgba(100, 116, 139, 0.2)',
+                        background: 'rgba(100, 116, 139, 0.1)',
+                        color: '#94a3b8',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        maxWidth: '140px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.2s',
+                      }}
+                      title={h.question}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = 'rgba(100, 255, 218, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(100, 255, 218, 0.2)';
+                        e.currentTarget.style.color = '#64ffda';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = 'rgba(100, 116, 139, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(100, 116, 139, 0.2)';
+                        e.currentTarget.style.color = '#94a3b8';
+                      }}
+                    >
+                      🕐 {h.question}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Input Field */}
             <div style={{
-              padding: '12px 16px',
-              borderTop: '1px solid rgba(100, 255, 218, 0.1)',
-              background: 'rgba(15, 23, 42, 0.5)',
+              display: 'flex',
+              gap: '10px',
+              padding: '6px',
+              borderRadius: '16px',
+              border: '1px solid rgba(100, 255, 218, 0.2)',
+              background: 'rgba(30, 41, 59, 0.6)',
             }}>
-              <div style={{ color: '#64748b', fontSize: '10px', marginBottom: '6px' }}>
-                Recent ({qaHistory.length})
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {qaHistory.slice(-4).reverse().map((h, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setQaQuestion(h.question);
-                      vscode.postMessage({ command: 'askQuestion', question: h.question });
-                    }}
-                    style={{
-                      padding: '3px 8px',
-                      borderRadius: '10px',
-                      border: '1px solid rgba(100, 255, 218, 0.15)',
-                      background: 'rgba(100, 255, 218, 0.03)',
-                      color: '#94a3b8',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                      maxWidth: '150px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={h.question}
-                  >
-                    {h.question}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="text"
+                value={qaQuestion}
+                onChange={(e) => setQaQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && qaQuestion.trim() && !qaLoading) {
+                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                  }
+                }}
+                placeholder="Ask about your codebase..."
+                style={{
+                  flex: 1,
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#f1f5f9',
+                  fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (qaQuestion.trim() && !qaLoading) {
+                    vscode.postMessage({ command: 'askQuestion', question: qaQuestion });
+                  }
+                }}
+                disabled={!qaQuestion.trim() || qaLoading}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: qaQuestion.trim() && !qaLoading
+                    ? 'linear-gradient(135deg, #64ffda 0%, #38bdf8 100%)'
+                    : 'rgba(100, 116, 139, 0.2)',
+                  color: qaQuestion.trim() && !qaLoading ? '#0f172a' : '#64748b',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: qaQuestion.trim() && !qaLoading ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  boxShadow: qaQuestion.trim() && !qaLoading ? '0 4px 12px rgba(100, 255, 218, 0.3)' : 'none',
+                }}
+              >
+                {qaLoading ? (
+                  <span style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid rgba(100, 255, 218, 0.3)',
+                    borderTop: '2px solid #64ffda',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }} />
+                ) : (
+                  <>
+                    <span>Send</span>
+                    <span>➤</span>
+                  </>
+                )}
+              </button>
             </div>
-          )}
+          </div>
         </div>
+      )}
+
+      {/* API Key Configuration Modal */}
+      {showApiKeyModal && (
+        <ApiKeyConfigModal
+          onClose={() => setShowApiKeyModal(false)}
+          onConfigure={handleConfigureApiKey}
+        />
       )}
 
       {/* Global Styles */}

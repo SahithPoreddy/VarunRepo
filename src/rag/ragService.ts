@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { LiteLLMService, getLiteLLMService } from '../llm/litellmService';
 
 // In-memory ChromaDB types (simplified for in-memory use)
 interface InMemoryDocument {
@@ -26,6 +27,7 @@ interface SearchResult {
 /**
  * RAG Service with In-Memory ChromaDB for vector-based semantic search
  * Uses a pure in-memory implementation - no external server required
+ * Integrates with LiteLLM for AI-powered answer generation
  */
 export class RAGService {
   private isInitialized: boolean = false;
@@ -37,6 +39,13 @@ export class RAGService {
   private inMemoryCollection: Map<string, InMemoryDocument> = new Map();
   private collectionName: string = 'codebase_docs';
   private useInMemoryChroma: boolean = true;
+  
+  // LiteLLM for AI-powered answers
+  private litellm: LiteLLMService;
+
+  constructor() {
+    this.litellm = getLiteLLMService();
+  }
 
   /**
    * Initialize the RAG service with in-memory ChromaDB
@@ -402,8 +411,8 @@ export class RAGService {
   }
 
   /**
-   * Answer a question about the project using RAG search
-   * Returns relevant context and a synthesized answer
+   * Answer a question about the project using RAG search + LLM
+   * Returns relevant context and an AI-generated answer
    */
   async answerQuestion(question: string): Promise<{
     answer: string;
@@ -415,12 +424,14 @@ export class RAGService {
       score: number;
     }>;
     confidence: 'high' | 'medium' | 'low';
+    aiGenerated: boolean;
   }> {
     if (!this.isInitialized) {
       return {
         answer: 'RAG service is not initialized. Please analyze the workspace first.',
         relevantNodes: [],
-        confidence: 'low'
+        confidence: 'low',
+        aiGenerated: false
       };
     }
 
@@ -431,7 +442,8 @@ export class RAGService {
       return {
         answer: 'No relevant information found in the codebase. Try rephrasing your question or use more specific terms.',
         relevantNodes: [],
-        confidence: 'low'
+        confidence: 'low',
+        aiGenerated: false
       };
     }
 
@@ -444,24 +456,73 @@ export class RAGService {
       score: r.score
     }));
 
-    // Synthesize an answer based on the results
+    // Determine confidence based on search scores
     const topScore = results[0].score;
     const confidence: 'high' | 'medium' | 'low' = 
       topScore > 1.0 ? 'high' : 
       topScore > 0.5 ? 'medium' : 'low';
 
-    // Build answer from top results
-    let answer = this.synthesizeAnswer(question, results);
+    // Try to use LLM for intelligent answer generation
+    let answer: string;
+    let aiGenerated = false;
+
+    if (this.litellm.isReady()) {
+      try {
+        answer = await this.generateLLMAnswer(question, results);
+        aiGenerated = true;
+      } catch (error: any) {
+        console.error('LLM answer generation failed, using fallback:', error);
+        // Check if it's an API key error
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.includes('401') || errorMessage.includes('Unauthorized') || errorMessage.includes('API key')) {
+          answer = `⚠️ **API Key Error**\n\nThe AI service returned an authentication error. Your API key may be invalid or expired.\n\n**To fix this:**\n1. Click the "Setup API" button in the toolbar\n2. Enter a valid API key from your provider (OpenAI, Anthropic, etc.)\n3. Try your question again\n\n---\n\n*Meanwhile, here's what I found using basic search:*\n\n${this.synthesizeAnswer(question, results)}`;
+        } else {
+          answer = `⚠️ **AI Service Unavailable**\n\nCould not generate an AI-powered answer. Using basic search results instead.\n\n---\n\n${this.synthesizeAnswer(question, results)}`;
+        }
+      }
+    } else {
+      // No API key configured
+      answer = `🔑 **API Key Required for AI Answers**\n\nTo get intelligent, context-aware answers, please configure an API key:\n\n1. Click the "Setup API" button in the toolbar\n2. Enter your API key (OpenAI, Anthropic, or LiteLLM)\n3. Try your question again\n\n---\n\n*Here's what I found using basic search:*\n\n${this.synthesizeAnswer(question, results)}`;
+    }
 
     return {
       answer,
       relevantNodes,
-      confidence
+      confidence,
+      aiGenerated
     };
   }
 
   /**
-   * Synthesize a human-readable answer from search results
+   * Generate an intelligent answer using LLM with RAG context
+   */
+  private async generateLLMAnswer(question: string, results: SearchResult[]): Promise<string> {
+    // Build context from search results
+    const contextParts = results.slice(0, 5).map((r, i) => {
+      const name = r.metadata.name || r.id;
+      const type = r.metadata.type || 'unknown';
+      const filePath = r.metadata.filePath || '';
+      const summary = r.metadata.summary || '';
+      const content = r.content.substring(0, 800);
+      
+      return `### ${i + 1}. ${name} (${type})
+**File**: ${filePath}
+**Summary**: ${summary}
+
+\`\`\`
+${content}
+\`\`\``;
+    });
+
+    const context = contextParts.join('\n\n---\n\n');
+
+    // Call LLM with the context
+    const answer = await this.litellm.generateRAGAnswer(question, context);
+    return answer;
+  }
+
+  /**
+   * Synthesize a human-readable answer from search results (fallback)
    */
   private synthesizeAnswer(question: string, results: SearchResult[]): string {
     const questionLower = question.toLowerCase();

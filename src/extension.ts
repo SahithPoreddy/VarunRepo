@@ -375,6 +375,10 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
 
       // Create or show visualization panel
       if (visualizationPanel && !visualizationPanel.isDisposed) {
+        // Update RAG service on existing panel so Q&A works
+        if (ragService) {
+          visualizationPanel.updateRagService(ragService);
+        }
         visualizationPanel.show();
       } else {
         // Create new panel

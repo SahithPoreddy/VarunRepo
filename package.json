@@ -1,7 +1,7 @@
 {
   "name": "codebase-visualizer",
-  "displayName": "Codebase Visualizer with Cline",
-  "description": "Interactive codebase visualization with AI-powered documentation and code modifications using Cline",
+  "displayName": "Codebase Visualizer with Agent Assist",
+  "description": "Interactive codebase visualization with AI-powered documentation and intelligent code assistance",
   "version": "0.1.0",
   "engines": {
     "vscode": "^1.84.0"
