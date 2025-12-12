@@ -126,6 +126,16 @@
             "gemini-1.5-pro"
           ],
           "description": "LLM model to use for documentation generation"
+        },
+        "codebaseVisualizer.chromadb.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable ChromaDB for semantic vector search (requires ChromaDB server running)"
+        },
+        "codebaseVisualizer.chromadb.url": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "ChromaDB server URL"
         }
       }
     }
@@ -162,6 +172,7 @@
     "@types/dagre": "^0.7.53",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "chromadb": "^3.1.7",
     "dagre": "^0.8.5",
     "java-parser": "^2.0.0",
     "marked": "^17.0.1",

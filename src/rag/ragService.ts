@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { ChromaClient, Collection } from 'chromadb';
 
 interface RAGDocument {
   id: string;
@@ -16,27 +17,70 @@ interface SearchResult {
 }
 
 /**
- * RAG Service using local file-based storage for document retrieval
- * This is a lightweight implementation that doesn't require external dependencies
+ * RAG Service with ChromaDB support for vector-based semantic search
+ * Falls back to local TF-IDF search if ChromaDB is unavailable
  */
 export class RAGService {
   private isInitialized: boolean = false;
   private workspaceRoot: string = '';
   private localDocsCache: Map<string, RAGDocument> = new Map();
   private invertedIndex: Map<string, Set<string>> = new Map(); // word -> document IDs
+  
+  // ChromaDB
+  private chromaClient: ChromaClient | null = null;
+  private chromaCollection: Collection | null = null;
+  private useChromaDB: boolean = false;
+  private collectionName: string = 'codebase_docs';
 
   /**
    * Initialize the RAG service
+   * @param workspaceUri The workspace URI
+   * @param chromaUrl Optional ChromaDB server URL (default: http://localhost:8000)
    */
-  async initialize(workspaceUri: vscode.Uri): Promise<boolean> {
+  async initialize(workspaceUri: vscode.Uri, chromaUrl?: string): Promise<boolean> {
     this.workspaceRoot = workspaceUri.fsPath;
     
-    // Load local docs cache
+    // Create unique collection name based on workspace
+    const workspaceName = path.basename(this.workspaceRoot).replace(/[^a-zA-Z0-9]/g, '_');
+    this.collectionName = `codebase_${workspaceName}`;
+    
+    // Try to connect to ChromaDB if URL is provided
+    if (chromaUrl) {
+      try {
+        await this.initializeChromaDB(chromaUrl);
+      } catch (error) {
+        console.warn('ChromaDB initialization failed, using local fallback:', error);
+      }
+    }
+    
+    // Always load local cache as fallback
     await this.loadLocalDocsCache();
     this.isInitialized = true;
     
-    console.log('RAG Service initialized with local storage');
+    console.log(`RAG Service initialized (ChromaDB: ${this.useChromaDB ? 'enabled' : 'disabled'})`);
     return true;
+  }
+
+  /**
+   * Initialize ChromaDB connection
+   */
+  private async initializeChromaDB(chromaUrl: string): Promise<void> {
+    this.chromaClient = new ChromaClient({ path: chromaUrl });
+    
+    // Test connection
+    await this.chromaClient.listCollections();
+    
+    // Get or create collection
+    this.chromaCollection = await this.chromaClient.getOrCreateCollection({
+      name: this.collectionName,
+      metadata: { 
+        workspace: this.workspaceRoot,
+        created: new Date().toISOString()
+      }
+    });
+    
+    this.useChromaDB = true;
+    console.log(`ChromaDB connected: collection "${this.collectionName}"`);
   }
 
   /**
@@ -91,30 +135,123 @@ export class RAGService {
   }
 
   /**
-   * Index documents into local cache
+   * Index documents into ChromaDB or local cache
    */
   async indexDocuments(documents: RAGDocument[]): Promise<void> {
     if (!this.isInitialized) {
       throw new Error('RAG service not initialized');
     }
 
-    // Store in local cache and build index
+    // Always index locally for fallback
     documents.forEach(doc => {
       this.localDocsCache.set(doc.id, doc);
       this.indexDocument(doc);
     });
+
+    // Also index in ChromaDB if available
+    if (this.useChromaDB && this.chromaCollection) {
+      try {
+        await this.indexToChromaDB(documents);
+      } catch (error) {
+        console.error('ChromaDB indexing failed:', error);
+      }
+    }
     
-    console.log(`Indexed ${documents.length} documents in local cache`);
+    console.log(`Indexed ${documents.length} documents (ChromaDB: ${this.useChromaDB})`);
   }
 
   /**
-   * Search for similar documents using TF-IDF like scoring
+   * Index documents into ChromaDB
+   */
+  private async indexToChromaDB(documents: RAGDocument[]): Promise<void> {
+    if (!this.chromaCollection) return;
+
+    const ids: string[] = [];
+    const contents: string[] = [];
+    const metadatas: Record<string, any>[] = [];
+
+    for (const doc of documents) {
+      const sanitizedId = doc.id.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 100);
+      ids.push(sanitizedId);
+      contents.push(doc.content);
+      metadatas.push({ ...doc.metadata, originalId: doc.id });
+    }
+
+    // Delete existing then add
+    try {
+      await this.chromaCollection.delete({ ids });
+    } catch (e) { /* ignore */ }
+
+    // Add in batches
+    const batchSize = 100;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      await this.chromaCollection.add({
+        ids: ids.slice(i, i + batchSize),
+        documents: contents.slice(i, i + batchSize),
+        metadatas: metadatas.slice(i, i + batchSize)
+      });
+    }
+  }
+
+  /**
+   * Search for similar documents using ChromaDB or TF-IDF
    */
   async search(query: string, topK: number = 5): Promise<SearchResult[]> {
     if (!this.isInitialized) {
       throw new Error('RAG service not initialized');
     }
 
+    // Try ChromaDB first if available
+    if (this.useChromaDB && this.chromaCollection) {
+      try {
+        return await this.searchChromaDB(query, topK);
+      } catch (error) {
+        console.error('ChromaDB search failed, falling back to local:', error);
+      }
+    }
+
+    // Fallback to local TF-IDF search
+    return this.searchLocal(query, topK);
+  }
+
+  /**
+   * Search using ChromaDB vector similarity
+   */
+  private async searchChromaDB(query: string, topK: number): Promise<SearchResult[]> {
+    if (!this.chromaCollection) return [];
+
+    const results = await this.chromaCollection.query({
+      queryTexts: [query],
+      nResults: topK
+    });
+
+    if (!results.ids?.[0]) return [];
+
+    const searchResults: SearchResult[] = [];
+    for (let i = 0; i < results.ids[0].length; i++) {
+      const id = results.ids[0][i];
+      const document = results.documents?.[0]?.[i] || '';
+      const metadata = results.metadatas?.[0]?.[i] || {};
+      const distance = results.distances?.[0]?.[i] || 0;
+      
+      // Convert distance to similarity score
+      const score = 1 / (1 + distance);
+
+      searchResults.push({
+        id: (metadata as any).originalId || id,
+        content: document,
+        metadata: metadata as Record<string, any>,
+        score
+      });
+    }
+
+    return searchResults;
+  }
+
+  /**
+   * Local TF-IDF search (fallback)
+   */
+  private searchLocal(query: string, topK: number): SearchResult[] {
     const queryWords = this.tokenize(query);
     const scores = new Map<string, number>();
     

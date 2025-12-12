@@ -357,7 +357,12 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
       
       // Initialize RAG service and index documents
       try {
-        await ragService.initialize(workspaceUri);
+        // Check if ChromaDB is enabled
+        const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+        const chromaEnabled = config.get<boolean>('chromadb.enabled', false);
+        const chromaUrl = chromaEnabled ? config.get<string>('chromadb.url', 'http://localhost:8000') : undefined;
+        
+        await ragService.initialize(workspaceUri, chromaUrl);
         
         if (documentation) {
           const ragChunks = docGenerator.generateRAGChunks(documentation);
