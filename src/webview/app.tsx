@@ -627,11 +627,12 @@ const CustomNode = ({ data }: {
 
 const nodeTypes = { custom: CustomNode };
 
-// ============ Full Documentation Panel ============
+// ============ Full Documentation Panel - Right Side Slide ============
 const DocsPanel = ({
   docsData,
   onClose,
-  onNodeClick
+  onNodeClick,
+  persona
 }: {
   docsData: {
     version: string;
@@ -643,6 +644,7 @@ const DocsPanel = ({
   };
   onClose: () => void;
   onNodeClick: (nodeId: string) => void;
+  persona: 'developer' | 'product-manager' | 'architect' | 'business-analyst';
 }) => {
   const [activeSection, setActiveSection] = useState<'overview' | 'components' | 'architecture'>('overview');
   const [searchTerm, setSearchTerm] = useState('');
@@ -661,6 +663,14 @@ const DocsPanel = ({
     return matchesSearch && matchesType;
   });
 
+  // Persona display names
+  const personaLabels: Record<string, string> = {
+    'developer': '👨‍💻 Developer',
+    'product-manager': '📋 Product Manager',
+    'architect': '🏗️ Architect',
+    'business-analyst': '📊 Business Analyst',
+  };
+
   // Render markdown content safely
   const renderMarkdown = (content: string): string => {
     if (!content) return '';
@@ -676,526 +686,297 @@ const DocsPanel = ({
       style={{
         position: 'fixed',
         top: 0,
-        left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.85)',
+        width: '550px',
+        background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
+        borderLeft: '1px solid rgba(100, 255, 218, 0.2)',
+        zIndex: 1100,
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: '-10px 0 40px rgba(0, 0, 0, 0.5)',
+        animation: 'slideInRight 0.3s ease',
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
+        padding: '16px 20px',
+        borderBottom: '1px solid rgba(100, 255, 218, 0.2)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1100,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          borderRadius: '16px',
-          width: '95%',
-          maxWidth: '1200px',
-          height: '90vh',
-          overflow: 'hidden',
-          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.5)',
-          border: '1px solid #334155',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
-          padding: '20px 24px',
-          borderBottom: '1px solid #334155',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', color: '#fff', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              📚 {docsData.projectName} Documentation
-              {docsData.generatedWithAI && (
-                <span style={{
-                  background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
-                  color: '#0f172a',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                }}>
-                  🤖 AI Generated
-                </span>
-              )}
-            </h1>
-            <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '13px' }}>
-              Generated: {new Date(docsData.generatedAt).toLocaleString()} • {nodeList.length} components
-            </p>
-          </div>
+        justifyContent: 'space-between',
+      }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            📚 {docsData.projectName} Docs
+            {docsData.generatedWithAI && (
+              <span style={{
+                background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
+                color: '#0f172a',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '10px',
+                fontWeight: 700,
+              }}>
+                AI
+              </span>
+            )}
+          </h2>
+          <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }}>
+            {personaLabels[persona]} • {nodeList.length} components
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '8px',
+            width: '32px',
+            height: '32px',
+            cursor: 'pointer',
+            color: '#ef4444',
+            fontSize: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div style={{
+        display: 'flex',
+        borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
+        background: '#0f172a',
+        padding: '0 16px',
+      }}>
+        {[
+          { id: 'overview', label: '📋 Overview' },
+          { id: 'components', label: '🧩 Components' },
+          { id: 'architecture', label: '🏗️ Architecture' },
+        ].map((tab) => (
           <button
-            onClick={onClose}
+            key={tab.id}
+            onClick={() => setActiveSection(tab.id as any)}
             style={{
-              background: 'rgba(255,255,255,0.1)',
+              padding: '10px 14px',
               border: 'none',
-              borderRadius: '10px',
-              width: '40px',
-              height: '40px',
+              background: activeSection === tab.id ? 'rgba(100, 255, 218, 0.1)' : 'transparent',
+              color: activeSection === tab.id ? '#64ffda' : '#94a3b8',
               cursor: 'pointer',
-              color: '#fff',
-              fontSize: '18px',
+              fontSize: '12px',
+              fontWeight: 500,
+              borderBottom: activeSection === tab.id ? '2px solid #64ffda' : '2px solid transparent',
             }}
           >
-            ✕
+            {tab.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Navigation Tabs */}
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid #334155',
-          background: '#0f172a',
-          padding: '0 24px',
-        }}>
-          {[
-            { id: 'overview', label: '📋 Overview', icon: '📋' },
-            { id: 'components', label: '🧩 Components', icon: '🧩' },
-            { id: 'architecture', label: '🏗️ Architecture', icon: '🏗️' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSection(tab.id as any)}
-              style={{
-                padding: '14px 20px',
-                border: 'none',
-                background: activeSection === tab.id ? 'rgba(100, 255, 218, 0.1)' : 'transparent',
-                color: activeSection === tab.id ? '#64ffda' : '#94a3b8',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 500,
-                borderBottom: activeSection === tab.id ? '2px solid #64ffda' : '2px solid transparent',
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-
-          {/* Overview Section */}
-          {activeSection === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Project Overview */}
-              <div style={{
-                background: 'rgba(100, 255, 218, 0.05)',
-                padding: '20px',
-                borderRadius: '12px',
-                border: '1px solid rgba(100, 255, 218, 0.2)',
-              }}>
-                <h2 style={{ margin: '0 0 12px 0', color: '#64ffda', fontSize: '18px' }}>
-                  Project Overview
-                </h2>
-                <div
-                  className="markdown-content"
-                  style={{ color: '#e2e8f0', lineHeight: 1.7 }}
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
-                />
-              </div>
-
-              {/* Quick Stats */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                <div style={{
-                  background: '#1e293b',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#64ffda' }}>{nodeList.length}</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Components</div>
-                </div>
-                <div style={{
-                  background: '#1e293b',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#a78bfa' }}>{nodeTypes.length}</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Component Types</div>
-                </div>
-                <div style={{
-                  background: '#1e293b',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '32px', fontWeight: 700, color: '#fbbf24' }}>{docsData.architecture.patterns.length}</div>
-                  <div style={{ color: '#94a3b8', fontSize: '14px' }}>Patterns Detected</div>
-                </div>
-              </div>
-
-              {/* Patterns */}
-              {docsData.architecture.patterns.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #334155',
-                }}>
-                  <h3 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '16px' }}>
-                    🎯 Patterns & Practices
-                  </h3>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {docsData.architecture.patterns.map((pattern, i) => (
-                      <span key={i} style={{
-                        background: 'rgba(251, 191, 36, 0.1)',
-                        color: '#fbbf24',
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                      }}>
-                        {pattern}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Layers */}
-              {docsData.architecture.layers.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  border: '1px solid #334155',
-                }}>
-                  <h3 style={{ margin: '0 0 12px 0', color: '#60a5fa', fontSize: '16px' }}>
-                    📁 Directory Structure
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {docsData.architecture.layers.map((layer, i) => (
-                      <div key={i} style={{
-                        background: 'rgba(96, 165, 250, 0.1)',
-                        color: '#60a5fa',
-                        padding: '8px 12px',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontFamily: 'monospace',
-                      }}>
-                        {layer}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+        {/* Overview Section */}
+        {activeSection === 'overview' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{
+              background: 'rgba(100, 255, 218, 0.05)',
+              padding: '16px',
+              borderRadius: '10px',
+              border: '1px solid rgba(100, 255, 218, 0.2)',
+            }}>
+              <h3 style={{ margin: '0 0 10px 0', color: '#64ffda', fontSize: '14px' }}>
+                Project Overview
+              </h3>
+              <div
+                className="markdown-content"
+                style={{ color: '#e2e8f0', lineHeight: 1.7, fontSize: '13px' }}
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture?.overview || 'No overview available.') }}
+              />
             </div>
-          )}
 
-          {/* Components Section */}
-          {activeSection === 'components' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {/* Search and Filter */}
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <input
-                  type="text"
-                  placeholder="🔍 Search components..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
+            {/* Stats */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '10px',
+            }}>
+              <div style={{
+                background: '#1e293b',
+                padding: '12px',
+                borderRadius: '8px',
+                textAlign: 'center',
+              }}>
+                <div style={{ color: '#64ffda', fontSize: '20px', fontWeight: 600 }}>{nodeList.length}</div>
+                <div style={{ color: '#94a3b8', fontSize: '11px' }}>Components</div>
+              </div>
+              <div style={{
+                background: '#1e293b',
+                padding: '12px',
+                borderRadius: '8px',
+                textAlign: 'center',
+              }}>
+                <div style={{ color: '#a78bfa', fontSize: '20px', fontWeight: 600 }}>{nodeTypes.length}</div>
+                <div style={{ color: '#94a3b8', fontSize: '11px' }}>Types</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Components Section */}
+        {activeSection === 'components' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Search */}
+            <input
+              type="text"
+              placeholder="Search components..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(100, 255, 218, 0.2)',
+                background: 'rgba(15, 23, 42, 0.8)',
+                color: '#e2e8f0',
+                fontSize: '12px',
+                outline: 'none',
+              }}
+            />
+
+            {/* Type Filter */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setSelectedType('all')}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: selectedType === 'all' ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
+                  color: selectedType === 'all' ? '#0f172a' : '#64ffda',
+                  fontSize: '10px',
+                  cursor: 'pointer',
+                }}
+              >
+                All
+              </button>
+              {nodeTypes.map((type: string) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type)}
                   style={{
-                    flex: 1,
-                    minWidth: '200px',
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    color: '#fff',
-                    fontSize: '14px',
-                  }}
-                />
-                <select
-                  value={selectedType}
-                  onChange={e => setSelectedType(e.target.value)}
-                  style={{
-                    background: '#1e293b',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    color: '#fff',
-                    fontSize: '14px',
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: selectedType === type ? '#64ffda' : 'rgba(100, 255, 218, 0.1)',
+                    color: selectedType === type ? '#0f172a' : '#64ffda',
+                    fontSize: '10px',
                     cursor: 'pointer',
                   }}
                 >
-                  <option value="all">All Types</option>
-                  {nodeTypes.map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
-                </select>
-              </div>
+                  {type}
+                </button>
+              ))}
+            </div>
 
-              {/* Component List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {filteredNodes.map((node: any) => (
-                  <div
-                    key={node.id}
-                    style={{
-                      background: expandedNode === node.id
-                        ? 'linear-gradient(135deg, rgba(100, 255, 218, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)'
-                        : '#1e293b',
-                      borderRadius: '12px',
-                      border: expandedNode === node.id
-                        ? '1px solid rgba(100, 255, 218, 0.3)'
-                        : '1px solid #334155',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {/* Component Header */}
-                    <div
-                      style={{
-                        padding: '16px 20px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                      onClick={() => setExpandedNode(expandedNode === node.id ? null : node.id)}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '20px' }}>{typeIcons[node.type] || '📄'}</span>
-                        <div>
-                          <div style={{ color: '#fff', fontWeight: 600, fontSize: '15px' }}>{node.name}</div>
-                          <div style={{ color: '#64748b', fontSize: '12px', marginTop: '2px' }}>
-                            {node.type} • {node.relativePath}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {node.aiComplexity && (
-                          <span style={{
-                            background: node.aiComplexity === 'low' ? 'rgba(34, 197, 94, 0.2)' :
-                              node.aiComplexity === 'high' ? 'rgba(239, 68, 68, 0.2)' :
-                                'rgba(251, 191, 36, 0.2)',
-                            color: node.aiComplexity === 'low' ? '#22c55e' :
-                              node.aiComplexity === 'high' ? '#ef4444' : '#fbbf24',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            textTransform: 'uppercase',
-                          }}>
-                            {node.aiComplexity}
-                          </span>
-                        )}
-                        <span style={{
-                          color: '#64748b',
-                          fontSize: '18px',
-                          transition: 'transform 0.2s',
-                          transform: expandedNode === node.id ? 'rotate(180deg)' : 'rotate(0deg)',
-                        }}>
-                          ▼
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Expanded Content */}
-                    {expandedNode === node.id && (
-                      <div style={{
-                        padding: '0 20px 20px 20px',
-                        borderTop: '1px solid rgba(100, 255, 218, 0.1)',
-                      }}>
-                        {/* AI Summary */}
-                        {node.aiSummary && (
-                          <div style={{ marginTop: '16px' }}>
-                            <div style={{ color: '#64ffda', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                              🤖 AI Summary
-                            </div>
-                            <div
-                              className="markdown-content"
-                              style={{ color: '#e2e8f0', fontSize: '14px', lineHeight: 1.6 }}
-                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiSummary) }}
-                            />
-                          </div>
-                        )}
-
-                        {/* AI Description */}
-                        {node.aiDescription && (
-                          <div style={{ marginTop: '16px' }}>
-                            <div style={{ color: '#a78bfa', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                              📝 Description
-                            </div>
-                            <div
-                              className="markdown-content"
-                              style={{ color: '#cbd5e1', fontSize: '14px', lineHeight: 1.6 }}
-                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.aiDescription) }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Technical Details */}
-                        {node.technicalDetails && (
-                          <div style={{
-                            marginTop: '16px',
-                            background: 'rgba(0,0,0,0.3)',
-                            padding: '12px',
-                            borderRadius: '8px',
-                          }}>
-                            <div style={{ color: '#94a3b8', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                              📋 Technical Details
-                            </div>
-                            <div
-                              className="markdown-content"
-                              style={{ color: '#94a3b8', fontSize: '13px', lineHeight: 1.5 }}
-                              dangerouslySetInnerHTML={{ __html: renderMarkdown(node.technicalDetails) }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Key Features */}
-                        {node.aiKeyFeatures?.length > 0 && (
-                          <div style={{ marginTop: '16px' }}>
-                            <div style={{ color: '#fbbf24', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                              ✨ Key Features
-                            </div>
-                            <ul style={{ margin: 0, paddingLeft: '20px', color: '#e2e8f0' }}>
-                              {node.aiKeyFeatures.map((feature: string, i: number) => (
-                                <li key={i} style={{ marginBottom: '4px', fontSize: '13px' }}>{feature}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Patterns */}
-                        {node.patterns?.length > 0 && (
-                          <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {node.patterns.map((pattern: string, i: number) => (
-                              <span key={i} style={{
-                                background: 'rgba(251, 191, 36, 0.1)',
-                                color: '#fbbf24',
-                                padding: '4px 10px',
-                                borderRadius: '4px',
-                                fontSize: '12px',
-                              }}>
-                                {pattern}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* View in Graph Button */}
-                        <button
-                          onClick={() => {
-                            onNodeClick(node.id);
-                            onClose();
-                          }}
-                          style={{
-                            marginTop: '16px',
-                            background: 'linear-gradient(135deg, #64ffda 0%, #a78bfa 100%)',
-                            border: 'none',
-                            borderRadius: '8px',
-                            padding: '10px 16px',
-                            color: '#0f172a',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          📍 View in Graph
-                        </button>
-                      </div>
-                    )}
+            {/* Component List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {filteredNodes.slice(0, 20).map((node: any, i: number) => (
+                <div
+                  key={i}
+                  onClick={() => onNodeClick(node.id || node.name)}
+                  style={{
+                    background: '#1e293b',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(100, 255, 218, 0.1)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64ffda', fontWeight: 600, fontSize: '13px' }}>{node.name}</span>
+                    <span style={{
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'rgba(100, 255, 218, 0.1)',
+                      color: '#64ffda',
+                    }}>
+                      {node.type}
+                    </span>
                   </div>
-                ))}
-              </div>
-
-              {filteredNodes.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔍</div>
-                  <p>No components match your search</p>
+                  {node.aiSummary && (
+                    <p style={{ margin: '6px 0 0 0', color: '#94a3b8', fontSize: '11px', lineHeight: 1.4 }}>
+                      {node.aiSummary.substring(0, 100)}...
+                    </p>
+                  )}
+                </div>
+              ))}
+              {filteredNodes.length > 20 && (
+                <div style={{ textAlign: 'center', color: '#64748b', fontSize: '11px', padding: '8px' }}>
+                  +{filteredNodes.length - 20} more components
                 </div>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Architecture Section */}
-          {activeSection === 'architecture' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Architecture Overview */}
-              <div style={{
-                background: 'rgba(100, 255, 218, 0.05)',
-                padding: '24px',
-                borderRadius: '12px',
-                border: '1px solid rgba(100, 255, 218, 0.2)',
-              }}>
-                <h2 style={{ margin: '0 0 16px 0', color: '#64ffda', fontSize: '20px' }}>
-                  🏗️ Architecture Overview
-                </h2>
-                <div
-                  className="markdown-content"
-                  style={{ color: '#e2e8f0', lineHeight: 1.8, fontSize: '15px' }}
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(docsData.architecture.overview) }}
-                />
-              </div>
-
-              {/* Component Type Distribution */}
+        {/* Architecture Section */}
+        {activeSection === 'architecture' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Layers */}
+            {docsData.architecture?.layers?.length > 0 && (
               <div style={{
                 background: '#1e293b',
-                padding: '20px',
-                borderRadius: '12px',
-                border: '1px solid #334155',
+                padding: '14px',
+                borderRadius: '10px',
               }}>
-                <h3 style={{ margin: '0 0 16px 0', color: '#60a5fa', fontSize: '16px' }}>
-                  📊 Component Distribution
-                </h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-                  {nodeTypes.map(type => {
-                    const count = nodeList.filter((n: any) => n.type === type).length;
-                    const percentage = Math.round((count / nodeList.length) * 100);
-                    return (
-                      <div key={type} style={{
-                        background: 'rgba(96, 165, 250, 0.1)',
-                        padding: '12px 16px',
-                        borderRadius: '8px',
-                        minWidth: '120px',
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                          <span>{typeIcons[type] || '📄'}</span>
-                          <span style={{ color: '#fff', fontWeight: 600 }}>{type}</span>
-                        </div>
-                        <div style={{ color: '#64ffda', fontSize: '20px', fontWeight: 700 }}>{count}</div>
-                        <div style={{ color: '#64748b', fontSize: '12px' }}>{percentage}%</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Patterns */}
-              <div style={{
-                background: '#1e293b',
-                padding: '20px',
-                borderRadius: '12px',
-                border: '1px solid #334155',
-              }}>
-                <h3 style={{ margin: '0 0 16px 0', color: '#fbbf24', fontSize: '16px' }}>
-                  🎯 Detected Patterns & Practices
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
-                  {docsData.architecture.patterns.map((pattern, i) => (
+                <h4 style={{ margin: '0 0 10px 0', color: '#64ffda', fontSize: '13px' }}>🏢 Architecture Layers</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {docsData.architecture.layers.map((layer: string, i: number) => (
                     <div key={i} style={{
-                      background: 'rgba(251, 191, 36, 0.1)',
-                      padding: '12px 16px',
-                      borderRadius: '8px',
-                      color: '#fbbf24',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
+                      background: 'rgba(100, 255, 218, 0.1)',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      color: '#e2e8f0',
+                      fontSize: '12px',
                     }}>
-                      <span>✓</span>
-                      <span>{pattern}</span>
+                      {layer}
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Patterns */}
+            {docsData.architecture?.patterns?.length > 0 && (
+              <div style={{
+                background: '#1e293b',
+                padding: '14px',
+                borderRadius: '10px',
+              }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#a78bfa', fontSize: '13px' }}>🎯 Design Patterns</h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {docsData.architecture.patterns.map((pattern: string, i: number) => (
+                    <span key={i} style={{
+                      background: 'rgba(139, 92, 246, 0.2)',
+                      color: '#a78bfa',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                    }}>
+                      {pattern}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1218,7 +999,7 @@ const NodePopup = ({
   nodeDocs?: any; // Docs from docs.json
 }) => {
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'cline'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'agentassist'>('overview');
 
   // Safe access to colors
   const colors = nodeColors[data?.type] || nodeColors.file;
@@ -1375,7 +1156,7 @@ const NodePopup = ({
           borderBottom: '1px solid #334155',
           background: '#0f172a',
         }}>
-          {['overview', 'details', 'cline'].map((tab) => (
+          {['overview', 'details', 'agentassist'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -1392,8 +1173,8 @@ const NodePopup = ({
               }}
             >
               {tab === 'overview' && '📋 Overview'}
-              {tab === 'details' && '🔍 Details'}
-              {tab === 'cline' && '🤖 Cline'}
+              {tab === 'details' && '🤖 AI Docs'}
+              {tab === 'agentassist' && '🔧 AgentAssist'}
             </button>
           ))}
         </div>
@@ -1601,198 +1382,12 @@ const NodePopup = ({
             </div>
           )}
 
-          {/* Details Tab */}
+          {/* Details Tab - AI Documentation & Sample Code */}
           {activeTab === 'details' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-              {/* Parameters */}
-              {parameters.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    📥 PARAMETERS ({parameters.length})
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {parameters.map((p: any, i: number) => (
-                      <span key={i} style={{
-                        background: 'rgba(100, 255, 218, 0.1)',
-                        color: '#64ffda',
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        fontFamily: 'monospace',
-                      }}>
-                        {formatParam(p)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Return Type */}
-              {returnType && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    📤 RETURN TYPE
-                  </div>
-                  <code style={{ color: '#fbbf24', fontSize: '14px' }}>{returnType}</code>
-                </div>
-              )}
-
-              {/* Imports */}
-              {imports.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    📦 IMPORTS ({imports.length})
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {imports.slice(0, 10).map((imp: any, i: number) => (
-                      <span key={i} style={{
-                        background: 'rgba(59, 130, 246, 0.1)',
-                        color: '#60a5fa',
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                      }}>
-                        {safeString(imp)}
-                      </span>
-                    ))}
-                    {imports.length > 10 && (
-                      <span style={{
-                        background: 'rgba(239, 68, 68, 0.1)',
-                        color: '#f87171',
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                      }}>
-                        +{imports.length - 10} more
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Exports */}
-              {exports.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    🚀 EXPORTS ({exports.length})
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {exports.map((exp: any, i: number) => (
-                      <span key={i} style={{
-                        background: 'rgba(16, 185, 129, 0.1)',
-                        color: '#34d399',
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                      }}>
-                        {safeString(exp)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Documentation */}
-              {docstring && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    📖 DOCUMENTATION
-                  </div>
-                  <pre style={{
-                    margin: 0,
-                    color: '#e2e8f0',
-                    fontSize: '13px',
-                    whiteSpace: 'pre-wrap',
-                    fontFamily: 'inherit',
-                  }}>
-                    {docstring}
-                  </pre>
-                </div>
-              )}
-
-              {/* Patterns / Design Patterns */}
-              {patterns.length > 0 && (
-                <div style={{
-                  background: '#1e293b',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
-                    🎯 PATTERNS DETECTED
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {patterns.map((pattern: any, i: number) => (
-                      <span key={i} style={{
-                        background: 'rgba(251, 191, 36, 0.1)',
-                        color: '#fbbf24',
-                        padding: '4px 10px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                      }}>
-                        {safeString(pattern)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Usage Examples */}
-              {usageExamples.length > 0 && (
-                <div style={{
-                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(100, 255, 218, 0.3)',
-                }}>
-                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '10px', fontWeight: 600 }}>
-                    💡 USAGE EXAMPLES
-                  </div>
-                  {usageExamples.map((example: any, i: number) => (
-                    <pre key={i} style={{
-                      margin: i === 0 ? 0 : '8px 0 0 0',
-                      padding: '10px',
-                      background: 'rgba(0,0,0,0.3)',
-                      borderRadius: '6px',
-                      color: '#e2e8f0',
-                      fontSize: '12px',
-                      whiteSpace: 'pre-wrap',
-                      fontFamily: 'Monaco, Consolas, monospace',
-                    }}>
-                      {safeString(example)}
-                    </pre>
-                  ))}
-                </div>
-              )}
-
-              {/* AI Documentation */}
-              {(aiSummary || aiDescription || technicalDetails) && (
+              {/* AI Documentation - Primary */}
+              {(aiSummary || aiDescription || technicalDetails) ? (
                 <div style={{
                   background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%)',
                   padding: '16px',
@@ -1890,24 +1485,124 @@ const NodePopup = ({
                     </div>
                   )}
                 </div>
+              ) : (
+                <div style={{
+                  background: 'rgba(59, 130, 246, 0.1)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>🤖</div>
+                  <p style={{ margin: 0, color: '#60a5fa', fontSize: '13px' }}>
+                    No AI documentation generated yet.
+                  </p>
+                  <p style={{ margin: '4px 0 0 0', color: '#94a3b8', fontSize: '11px' }}>
+                    Click "Generate" in the stats panel to create AI documentation.
+                  </p>
+                </div>
               )}
 
-              {/* Empty State */}
-              {parameters.length === 0 && !returnType && imports.length === 0 && exports.length === 0 && !docstring && patterns.length === 0 && usageExamples.length === 0 && !aiSummary && !aiDescription && !technicalDetails && (
+              {/* Sample Code / Usage Examples */}
+              {usageExamples.length > 0 && (
                 <div style={{
-                  textAlign: 'center',
-                  padding: '40px 20px',
-                  color: '#64748b',
+                  background: 'rgba(139, 92, 246, 0.1)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(139, 92, 246, 0.3)',
                 }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>📭</div>
-                  <p style={{ margin: 0 }}>No additional details available for this node.</p>
+                  <div style={{ fontSize: '12px', color: '#a78bfa', marginBottom: '12px', fontWeight: 600 }}>
+                    💡 SAMPLE CODE & USAGE
+                  </div>
+                  {usageExamples.map((example: any, i: number) => (
+                    <pre key={i} style={{
+                      margin: i === 0 ? 0 : '8px 0 0 0',
+                      padding: '12px',
+                      background: 'rgba(0,0,0,0.4)',
+                      borderRadius: '8px',
+                      color: '#e2e8f0',
+                      fontSize: '12px',
+                      whiteSpace: 'pre-wrap',
+                      fontFamily: 'Monaco, Consolas, "JetBrains Mono", monospace',
+                      overflowX: 'auto',
+                      border: '1px solid rgba(139, 92, 246, 0.2)',
+                    }}>
+                      {safeString(example)}
+                    </pre>
+                  ))}
+                </div>
+              )}
+
+              {/* Parameters & Return Type */}
+              {(parameters.length > 0 || returnType) && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
+                    📥 SIGNATURE
+                  </div>
+                  {parameters.length > 0 && (
+                    <div style={{ marginBottom: returnType ? '8px' : 0 }}>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>Parameters:</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {parameters.map((p: any, i: number) => (
+                          <span key={i} style={{
+                            background: 'rgba(100, 255, 218, 0.1)',
+                            color: '#64ffda',
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontFamily: 'monospace',
+                          }}>
+                            {formatParam(p)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {returnType && (
+                    <div>
+                      <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '4px' }}>Returns:</div>
+                      <code style={{ color: '#fbbf24', fontSize: '13px' }}>{returnType}</code>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Patterns Detected */}
+              {patterns.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#64ffda', marginBottom: '8px', fontWeight: 600 }}>
+                    🎯 PATTERNS DETECTED
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {patterns.map((pattern: any, i: number) => (
+                      <span key={i} style={{
+                        background: 'rgba(251, 191, 36, 0.1)',
+                        color: '#fbbf24',
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                      }}>
+                        {safeString(pattern)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Cline Tab */}
-          {activeTab === 'cline' && (
+          {/* AgentAssist Tab */}
+          {activeTab === 'agentassist' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{
                 background: '#1e293b',
@@ -1916,7 +1611,7 @@ const NodePopup = ({
                 border: '1px solid #334155',
               }}>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>
-                  Describe what changes you want Cline to make to <strong style={{ color: '#64ffda' }}>{label}</strong>.
+                  Describe what changes you want AgentAssist to make to <strong style={{ color: '#64ffda' }}>{label}</strong>.
                 </p>
               </div>
 
@@ -1942,7 +1637,9 @@ const NodePopup = ({
                 onClick={handleSendToCline}
                 disabled={!query.trim()}
                 style={{
-                  background: query.trim() ? '#64ffda' : '#334155',
+                  background: query.trim() 
+                    ? 'linear-gradient(135deg, #64ffda 0%, #4fd1c5 100%)' 
+                    : '#334155',
                   border: 'none',
                   borderRadius: '8px',
                   padding: '12px 20px',
@@ -1950,9 +1647,11 @@ const NodePopup = ({
                   fontSize: '14px',
                   fontWeight: 600,
                   cursor: query.trim() ? 'pointer' : 'not-allowed',
+                  boxShadow: query.trim() ? '0 4px 12px rgba(100, 255, 218, 0.3)' : 'none',
+                  transition: 'all 0.2s ease',
                 }}
               >
-                🚀 Send to Cline
+                🚀 Send to AgentAssist
               </button>
             </div>
           )}
@@ -2707,27 +2406,38 @@ const App = () => {
         <Panel position="top-left">
           {statsPanelOpen ? (
             <div style={styles.statsPanelContainer}>
-              {/* Header with close button on left */}
+              {/* Header with collapse button */}
               <div style={styles.statsPanelHeader}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <button
-                    onClick={() => setStatsPanelOpen(false)}
-                    style={styles.statsCloseButton}
-                    title="Close stats panel"
-                  >
-                    ✕
-                  </button>
                   <span style={{ color: '#64ffda', fontWeight: 600 }}>📊 Stats</span>
                   <span style={{ color: '#94a3b8', fontSize: '12px' }}>
                     {stats.visible}/{stats.nodes} nodes
                   </span>
                 </div>
-                {lastSyncTime && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '11px' }}>
-                    <span style={{ color: '#10b981' }}>●</span>
-                    Synced: {lastSyncTime}
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {lastSyncTime && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8', fontSize: '11px' }}>
+                      <span style={{ color: '#10b981' }}>●</span>
+                      Synced: {lastSyncTime}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setStatsPanelOpen(false)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#94a3b8',
+                      cursor: 'pointer',
+                      fontSize: '16px',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      transition: 'all 0.2s',
+                    }}
+                    title="Collapse panel"
+                  >
+                    ▲
+                  </button>
+                </div>
               </div>
 
               {/* Content */}
@@ -2930,19 +2640,28 @@ const App = () => {
             /* Collapsed state - just show icon button */
             <button
               onClick={() => setStatsPanelOpen(true)}
-              style={styles.statsOpenButton}
-              title="Open stats panel"
+              style={{
+                ...styles.statsOpenButton,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              title="Expand stats panel"
             >
-              📊 Stats
+              📊 Stats ▼
             </button>
           )}
         </Panel>
 
-        {/* Copilot Button - Top Right */}
+        {/* Ask AI Button - Top Right - offset to avoid collision */}
         <Panel position="top-right">
           <button
             onClick={() => setShowCopilotPanel(true)}
-            style={styles.copilotButton}
+            style={{
+              ...styles.copilotButton,
+              marginRight: showCopilotPanel ? '460px' : '0',
+              transition: 'margin-right 0.3s ease',
+            }}
             title="Ask questions about the codebase"
           >
             <span style={{ fontSize: '16px' }}>✨</span>
@@ -2970,6 +2689,7 @@ const App = () => {
         <DocsPanel
           docsData={docsData}
           onClose={() => setShowDocsPanel(false)}
+          persona={selectedPersona}
           onNodeClick={(nodeId) => {
             const node = graphData?.nodes.find(n => n.id === nodeId);
             if (node) {
@@ -3134,7 +2854,29 @@ const App = () => {
 
           {/* Answer Area */}
           <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-            {qaAnswer ? (
+            {qaLoading ? (
+              <div style={{
+                textAlign: 'center',
+                color: '#64748b',
+                padding: '40px 16px',
+              }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  margin: '0 auto 16px',
+                  border: '3px solid rgba(100, 255, 218, 0.2)',
+                  borderTop: '3px solid #64ffda',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                }} />
+                <p style={{ margin: 0, fontSize: '13px', color: '#64ffda' }}>
+                  Searching codebase...
+                </p>
+                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#475569' }}>
+                  Analyzing relevant code patterns
+                </p>
+              </div>
+            ) : qaAnswer ? (
               <div>
                 {/* Confidence Badge */}
                 <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
