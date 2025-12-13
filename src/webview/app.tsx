@@ -408,14 +408,14 @@ const CustomNode = ({ data }: {
     depth?: number;
     isRoot?: boolean;
     nodeId?: string;
+    isHighlighted?: boolean;
   }
 }) => {
   const colors = nodeColors[data.type] || nodeColors.file;
   const icon = typeIcons[data.type] || '📄';
   const depth = data.depth || 0;
 
-  // Calculate glow intensity based on depth
-  const glowIntensity = Math.max(0.15, 0.4 - (depth * 0.08));
+  // Professional scaling based on depth
   const nodeScale = Math.max(0.85, 1 - (depth * 0.03));
 
   // Handle expand button click - prevent event bubbling and dispatch toggle event
@@ -454,9 +454,9 @@ const CustomNode = ({ data }: {
 
       <div
         style={{
-          background: `linear-gradient(145deg, ${colors.bg}ee 0%, ${colors.bg}cc 50%, ${colors.bg}aa 100%)`,
-          border: `2px solid ${colors.border}`,
-          borderRadius: '14px',
+          background: `linear-gradient(145deg, ${colors.bg} 0%, ${colors.bg}dd 100%)`,
+          border: data.isHighlighted ? `3px solid #ffffff` : `2px solid ${colors.border}`,
+          borderRadius: '12px',
           padding: '14px 18px',
           color: colors.text,
           fontSize: `${13 * nodeScale}px`,
@@ -464,14 +464,13 @@ const CustomNode = ({ data }: {
           minWidth: `${180 * nodeScale}px`,
           maxWidth: `${260 * nodeScale}px`,
           textAlign: 'center',
-          boxShadow: `
-            0 4px 20px ${colors.bg}${Math.round(glowIntensity * 255).toString(16).padStart(2, '0')},
-            0 0 40px ${colors.border}${Math.round(glowIntensity * 0.5 * 255).toString(16).padStart(2, '0')},
-            inset 0 1px 0 rgba(255,255,255,0.1)
-          `,
+          boxShadow: data.isHighlighted 
+            ? '0 0 0 3px rgba(255,255,255,0.3), 0 8px 24px rgba(0,0,0,0.4)'
+            : '0 4px 12px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2)',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           cursor: 'pointer',
           position: 'relative' as const,
+          transform: data.isHighlighted ? 'scale(1.02)' : 'scale(1)',
         }}
       >
         {/* Header with icon and type */}
@@ -1391,7 +1390,8 @@ const NodePopup = ({
   onSendToCline,
   onOpenFile,
   allNodes,
-  nodeDocs
+  nodeDocs,
+  graphEdges
 }: {
   data: PopupData;
   onClose: () => void;
@@ -1399,6 +1399,7 @@ const NodePopup = ({
   onOpenFile: (filePath: string, line?: number) => void;
   allNodes: NodeData[];
   nodeDocs?: any; // Docs from docs.json
+  graphEdges?: Array<{ source: string; target: string; label?: string }>; // Graph edges for dependencies
 }) => {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'overview' | 'details' | 'agentassist'>('overview');
@@ -1476,6 +1477,36 @@ const NodePopup = ({
   const technicalDetails = safeString(nodeDocs?.technicalDetails || metadata.technicalDetails);
   const aiPurpose = safeString(nodeDocs?.aiPurpose);
   const aiComplexity = nodeDocs?.aiComplexity || 'medium';
+
+  // Compute dependencies (nodes this node depends on) and dependents (nodes that depend on this node)
+  const computedDependencies = React.useMemo(() => {
+    if (!graphEdges || !allNodes) return [];
+    // Edges where this node is the target (something points TO this node means this node depends on source)
+    // Actually, in a call graph: source calls target, so if source -> target, target depends on nothing from this edge
+    // Let's check: edges typically mean source -> target (source calls/imports target)
+    // So dependencies of current node = nodes that current node points TO (current is source)
+    const deps = graphEdges
+      .filter(e => e.source === data.nodeId)
+      .map(e => {
+        const targetNode = allNodes.find(n => n.id === e.target);
+        return targetNode ? { id: e.target, label: targetNode.label, type: targetNode.type } : null;
+      })
+      .filter(Boolean);
+    return deps;
+  }, [graphEdges, allNodes, data.nodeId]);
+
+  const computedDependents = React.useMemo(() => {
+    if (!graphEdges || !allNodes) return [];
+    // Dependents = nodes that call/import THIS node (current node is the target)
+    const deps = graphEdges
+      .filter(e => e.target === data.nodeId)
+      .map(e => {
+        const sourceNode = allNodes.find(n => n.id === e.source);
+        return sourceNode ? { id: e.source, label: sourceNode.label, type: sourceNode.type } : null;
+      })
+      .filter(Boolean);
+    return deps;
+  }, [graphEdges, allNodes, data.nodeId]);
 
   return (
     <div
@@ -2000,6 +2031,76 @@ const NodePopup = ({
                   </div>
                 </div>
               )}
+
+              {/* Dependencies - What this node uses */}
+              {computedDependencies.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#60a5fa', marginBottom: '8px', fontWeight: 600 }}>
+                    📤 DEPENDENCIES ({computedDependencies.length})
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '8px' }}>
+                    What this {nodeType} uses/calls:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {computedDependencies.map((dep: any, i: number) => (
+                      <span key={i} style={{
+                        background: 'rgba(96, 165, 250, 0.1)',
+                        color: '#60a5fa',
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}>
+                        <span style={{ fontSize: '10px' }}>→</span>
+                        {dep.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Used By - What depends on this node */}
+              {computedDependents.length > 0 && (
+                <div style={{
+                  background: '#1e293b',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                }}>
+                  <div style={{ fontSize: '11px', color: '#f472b6', marginBottom: '8px', fontWeight: 600 }}>
+                    📥 USED BY ({computedDependents.length})
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '8px' }}>
+                    What calls/uses this {nodeType}:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {computedDependents.map((dep: any, i: number) => (
+                      <span key={i} style={{
+                        background: 'rgba(244, 114, 182, 0.1)',
+                        color: '#f472b6',
+                        padding: '4px 10px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}>
+                        <span style={{ fontSize: '10px' }}>←</span>
+                        {dep.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2071,6 +2172,7 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [popupData, setPopupData] = useState<PopupData | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null); // For path highlighting
   const [isGeneratingDocs, setIsGeneratingDocs] = useState(false);
   const [docsGenerated, setDocsGenerated] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean | null>(null);
@@ -2342,6 +2444,47 @@ const App = () => {
     };
   }, [graphData, visibleNodeIds]);
 
+  // Helper function to get the path from root to a node
+  const getPathToNode = useCallback((nodeId: string, data: GraphData): Set<string> => {
+    const pathNodes = new Set<string>();
+    const pathEdges = new Set<string>();
+    
+    let currentId: string | undefined = nodeId;
+    pathNodes.add(currentId);
+    
+    // Traverse up to root
+    while (currentId) {
+      const node = data.nodes.find(n => n.id === currentId);
+      if (!node || !node.parentId) break;
+      
+      pathNodes.add(node.parentId);
+      pathEdges.add(`${node.parentId}->${currentId}`);
+      currentId = node.parentId;
+    }
+    
+    return pathNodes;
+  }, []);
+
+  // Helper function to check if an edge is in the highlighted path
+  const getHighlightedEdges = useCallback((nodeId: string | null, data: GraphData): Set<string> => {
+    if (!nodeId) return new Set();
+    
+    const pathEdges = new Set<string>();
+    let currentId: string | undefined = nodeId;
+    
+    // Traverse up to root and collect edges
+    while (currentId) {
+      const node = data.nodes.find(n => n.id === currentId);
+      if (!node || !node.parentId) break;
+      
+      // Add edge key in format that matches our edge id pattern
+      pathEdges.add(`${node.parentId}-${currentId}`);
+      currentId = node.parentId;
+    }
+    
+    return pathEdges;
+  }, []);
+
   // Build flow nodes with children info for collapsible UI
   const buildFlowNodes = useCallback((
     data: GraphData,
@@ -2349,8 +2492,11 @@ const App = () => {
     expanded: Set<string>,
     childMap: Map<string, string[]>,
     depthMap: Map<string, number>,
-    rootIds: Set<string>
+    rootIds: Set<string>,
+    highlightedNodeId: string | null = null
   ): Node[] => {
+    const pathNodes = highlightedNodeId ? getPathToNode(highlightedNodeId, data) : new Set<string>();
+    
     return data.nodes
       .filter(node => visibleIds.has(node.id))
       .map((node) => {
@@ -2359,6 +2505,7 @@ const App = () => {
         const isExpanded = expanded.has(node.id);
         const depth = depthMap.get(node.id) || 0;
         const isRoot = rootIds.has(node.id);
+        const isHighlighted = pathNodes.has(node.id);
 
         return {
           id: node.id,
@@ -2374,48 +2521,62 @@ const App = () => {
             childCount: children.length,
             depth,
             isRoot,
+            isHighlighted,
           },
         };
       });
-  }, []);
+  }, [getPathToNode]);
 
   // Build flow edges for visible nodes only - with smooth bezier curves
-  const buildFlowEdges = useCallback((data: GraphData, visibleIds: Set<string>): Edge[] => {
+  const buildFlowEdges = useCallback((
+    data: GraphData, 
+    visibleIds: Set<string>,
+    highlightedNodeId: string | null = null
+  ): Edge[] => {
+    const highlightedEdges = highlightedNodeId ? getHighlightedEdges(highlightedNodeId, data) : new Set<string>();
+    
     return data.edges
       .filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
-      .map((edge, index) => ({
-        id: `e-${edge.source}-${edge.target}-${index}`,
-        source: edge.source,
-        target: edge.target,
-        type: 'smoothstep', // Smooth curved edges for hierarchy
-        label: edge.label,
-        animated: false,
-        style: {
-          stroke: 'url(#edge-gradient)',
-          strokeWidth: 2.5,
-          strokeLinecap: 'round' as const,
-        },
-        markerEnd: {
-          type: MarkerType.ArrowClosed,
-          color: '#64ffda',
-          width: 18,
-          height: 18,
-        },
-        labelStyle: {
-          fill: '#e2e8f0',
-          fontSize: 11,
-          fontWeight: 600,
-          background: '#1e293b',
-        },
-        labelBgStyle: {
-          fill: 'rgba(30, 41, 59, 0.95)',
-          fillOpacity: 0.95,
-          rx: 4,
-          ry: 4,
-        },
-        labelBgPadding: [6, 4] as [number, number],
-      }));
-  }, []);
+      .map((edge, index) => {
+        const edgeKey = `${edge.source}-${edge.target}`;
+        const isHighlighted = highlightedEdges.has(edgeKey);
+        
+        return {
+          id: `e-${edge.source}-${edge.target}-${index}`,
+          source: edge.source,
+          target: edge.target,
+          type: 'smoothstep',
+          label: edge.label,
+          animated: isHighlighted,
+          className: isHighlighted ? 'highlighted' : '',
+          style: {
+            stroke: isHighlighted ? '#3b82f6' : 'url(#edge-gradient)',
+            strokeWidth: isHighlighted ? 3 : 2,
+            strokeLinecap: 'round' as const,
+            strokeDasharray: isHighlighted ? '8 4' : 'none',
+          },
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            color: isHighlighted ? '#3b82f6' : '#6b7280',
+            width: isHighlighted ? 18 : 16,
+            height: isHighlighted ? 18 : 16,
+          },
+          labelStyle: {
+            fill: '#e2e8f0',
+            fontSize: 11,
+            fontWeight: 600,
+            background: '#1e293b',
+          },
+          labelBgStyle: {
+            fill: 'rgba(30, 41, 59, 0.95)',
+            fillOpacity: 0.95,
+            rx: 4,
+            ry: 4,
+          },
+          labelBgPadding: [6, 4] as [number, number],
+        };
+      });
+  }, [getHighlightedEdges]);
 
   // Track previous state to prevent unnecessary re-renders
   const prevStateHashRef = React.useRef<string>('');
@@ -2435,13 +2596,34 @@ const App = () => {
     }
     prevStateHashRef.current = stateHash;
 
-    const flowNodes = buildFlowNodes(graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds);
-    const flowEdges = buildFlowEdges(graphData, visibleNodeIds);
+    const flowNodes = buildFlowNodes(graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds, selectedNodeId);
+    const flowEdges = buildFlowEdges(graphData, visibleNodeIds, selectedNodeId);
 
     const layouted = getLayoutedElements(flowNodes, flowEdges);
     setNodes(layouted.nodes);
     setEdges(layouted.edges);
   }, [graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds, buildFlowNodes, buildFlowEdges, setNodes, setEdges]);
+
+  // Update highlighting when selected node changes (without re-layout)
+  useEffect(() => {
+    if (!graphData || visibleNodeIds.size === 0) return;
+
+    // Rebuild nodes and edges with highlighting, preserving positions
+    const flowNodes = buildFlowNodes(graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds, selectedNodeId);
+    const flowEdges = buildFlowEdges(graphData, visibleNodeIds, selectedNodeId);
+
+    // Only update data properties without changing positions
+    setNodes(currentNodes => 
+      currentNodes.map(node => {
+        const newNode = flowNodes.find(n => n.id === node.id);
+        if (newNode) {
+          return { ...node, data: newNode.data };
+        }
+        return node;
+      })
+    );
+    setEdges(flowEdges);
+  }, [selectedNodeId, graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds, buildFlowNodes, buildFlowEdges, setNodes, setEdges]);
 
   // Track if graph has been initialized to avoid resetting on reloads
   const graphInitializedRef = React.useRef<string | null>(null);
@@ -2642,35 +2824,26 @@ const App = () => {
     return () => window.removeEventListener('nodeExpandToggle', handleExpandFlag);
   }, []);
 
-  // Handle node click - show popup unless expand button was clicked
+  // Handle single click - ONLY highlight path (no popup)
   const handleNodeClick: NodeMouseHandler = useCallback((event, node) => {
     // Check if this was an expand button click (the button will set this flag)
     if (expandClickedRef.current) {
       expandClickedRef.current = false;
-      return; // Don't show popup if expand was clicked
+      return; // Don't highlight if expand was clicked
     }
 
-    const nodeData = graphData?.nodes.find(n => n.id === node.id);
-    if (!nodeData) return;
+    // Single click: Only set selected node for path highlighting
+    setSelectedNodeId(node.id);
+  }, []);
 
-    // Show popup when clicking on the node
-    setPopupData({
-      nodeId: node.id,
-      label: nodeData.label,
-      type: nodeData.type,
-      filePath: nodeData.filePath,
-      description: nodeData.description,
-      parentId: nodeData.parentId,
-      metadata: nodeData.metadata,
-    });
-    // Request additional details from extension
-    vscode.postMessage({ command: 'getNodeDetails', nodeId: node.id });
-  }, [graphData]);
-
-  // Handle double-click - same as single click now (show popup)
+  // Handle double-click - highlight path AND show popup with details
   const handleNodeDoubleClick: NodeMouseHandler = useCallback((event, node) => {
     const nodeData = graphData?.nodes.find(n => n.id === node.id);
     if (nodeData) {
+      // Set selected node for path highlighting
+      setSelectedNodeId(node.id);
+      
+      // Show popup with node details
       setPopupData({
         nodeId: node.id,
         label: nodeData.label,
@@ -2828,16 +3001,43 @@ const App = () => {
       {/* Inject markdown styles */}
       <style>{markdownStyles}</style>
 
-      {/* SVG Definitions for gradients */}
+      {/* SVG Definitions for gradients and animated edges */}
       <svg style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>
+          {/* Default edge gradient - dark grey */}
           <linearGradient id="edge-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#64ffda" stopOpacity="0.4" />
-            <stop offset="50%" stopColor="#64ffda" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#64ffda" stopOpacity="0.4" />
+            <stop offset="0%" stopColor="#4b5563" stopOpacity="0.6" />
+            <stop offset="50%" stopColor="#6b7280" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#4b5563" stopOpacity="0.6" />
+          </linearGradient>
+          {/* Highlighted edge gradient - bright */}
+          <linearGradient id="edge-highlight-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#3b82f6" stopOpacity="1" />
+            <stop offset="50%" stopColor="#60a5fa" stopOpacity="1" />
+            <stop offset="100%" stopColor="#3b82f6" stopOpacity="1" />
           </linearGradient>
         </defs>
       </svg>
+
+      {/* CSS for animated dashed edges */}
+      <style>{`
+        @keyframes dashMove {
+          0% { stroke-dashoffset: 20; }
+          100% { stroke-dashoffset: 0; }
+        }
+        .react-flow__edge-path.highlighted {
+          stroke: #3b82f6 !important;
+          stroke-width: 3px !important;
+          stroke-dasharray: 8 4 !important;
+          animation: dashMove 0.5s linear infinite !important;
+        }
+        .react-flow__edge.highlighted .react-flow__edge-path {
+          stroke: #3b82f6 !important;
+          stroke-width: 3px !important;
+          stroke-dasharray: 8 4 !important;
+          animation: dashMove 0.5s linear infinite !important;
+        }
+      `}</style>
 
       <ReactFlow
         nodes={nodes}
@@ -2846,6 +3046,11 @@ const App = () => {
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onPaneClick={() => {
+          // Clear selection and path highlighting when clicking on empty canvas
+          setSelectedNodeId(null);
+          setPopupData(null);
+        }}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}
@@ -2853,13 +3058,22 @@ const App = () => {
         maxZoom={2}
         defaultViewport={{ x: 0, y: 0, zoom: 0.7 }}
         proOptions={{ hideAttribution: true }}
-        connectionLineStyle={{ stroke: '#64ffda', strokeWidth: 2 }}
+        connectionLineStyle={{ stroke: '#6b7280', strokeWidth: 2 }}
       >
+        {/* Dotted Grid Background */}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={25}
-          size={1.5}
-          color="rgba(100, 255, 218, 0.08)"
+          gap={20}
+          size={1}
+          color="rgba(100, 116, 139, 0.4)"
+        />
+        {/* Secondary grid layer for cross pattern */}
+        <Background
+          id="grid-2"
+          variant={BackgroundVariant.Dots}
+          gap={100}
+          size={2}
+          color="rgba(100, 116, 139, 0.25)"
         />
         <Controls
           style={{
@@ -3129,11 +3343,15 @@ const App = () => {
       {popupData && (
         <NodePopup
           data={popupData}
-          onClose={() => setPopupData(null)}
+          onClose={() => {
+            setPopupData(null);
+            setSelectedNodeId(null); // Clear path highlighting when popup closes
+          }}
           onSendToCline={handleSendToCline}
           onOpenFile={handleOpenFile}
           allNodes={graphData?.nodes || []}
           nodeDocs={getNodeDocs(popupData.nodeId)}
+          graphEdges={graphData?.edges || []}
         />
       )}
 

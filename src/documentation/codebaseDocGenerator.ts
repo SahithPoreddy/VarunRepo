@@ -154,6 +154,44 @@ export class CodebaseDocGenerator {
   }
 
   /**
+   * Ensure .gitattributes has merge strategy for .doc_sync folder
+   * This prevents merge conflicts by auto-resolving with "ours" strategy
+   */
+  private ensureGitAttributesMergeStrategy(): void {
+    try {
+      const gitattributesPath = path.join(this.workspaceRoot, '.gitattributes');
+      const mergeRules = `
+# Auto-resolve merge conflicts for generated documentation (.doc_sync)
+# Uses "ours" strategy - keeps current branch's version during merges
+# After merge, run "Sync Docs" to regenerate docs for the merged codebase
+.doc_sync/** merge=ours
+.doc_sync/docs.json merge=ours
+.doc_sync/graph/** merge=ours
+.doc_sync/nodes/** merge=ours
+.doc_sync/search.json merge=ours
+.doc_sync/metadata.json merge=ours
+`;
+
+      if (fs.existsSync(gitattributesPath)) {
+        // Check if .doc_sync rules already exist
+        const existingContent = fs.readFileSync(gitattributesPath, 'utf-8');
+        if (!existingContent.includes('.doc_sync/** merge=ours')) {
+          // Append the merge rules
+          fs.appendFileSync(gitattributesPath, '\n' + mergeRules);
+          console.log('Added .doc_sync merge strategy to existing .gitattributes');
+        }
+      } else {
+        // Create new .gitattributes file
+        fs.writeFileSync(gitattributesPath, mergeRules.trim() + '\n');
+        console.log('Created .gitattributes with .doc_sync merge strategy');
+      }
+    } catch (error) {
+      // Non-critical - just log and continue
+      console.warn('Could not update .gitattributes:', error);
+    }
+  }
+
+  /**
    * Generate documentation using ONLY AST parsers - NO LLM calls
    * Scans the entire repo and stores information in JSON files
    * This is fast and doesn't require an API key
@@ -186,6 +224,9 @@ export class CodebaseDocGenerator {
         fs.mkdirSync(folder, { recursive: true });
       }
     }
+
+    // Ensure .gitattributes has merge strategy for .doc_sync to avoid merge conflicts
+    this.ensureGitAttributesMergeStrategy();
 
     const { nodes, edges } = analysisResult.graph;
     const projectName = path.basename(this.workspaceRoot);
