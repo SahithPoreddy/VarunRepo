@@ -60,6 +60,21 @@
         "command": "codebase-visualizer.uninstallGitHooks",
         "title": "Uninstall Git Hooks",
         "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.showMCPStatus",
+        "title": "Manage MCP Connections",
+        "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.connectMCPServers",
+        "title": "Connect to External Projects (MCP)",
+        "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.disconnectMCPServers",
+        "title": "Disconnect MCP Servers",
+        "category": "Codebase Visualizer"
       }
     ],
     "configuration": {
@@ -126,6 +141,41 @@
             "gemini-1.5-pro"
           ],
           "description": "LLM model to use for documentation generation"
+        },
+        "codebaseVisualizer.mcpServers": {
+          "type": "array",
+          "default": [],
+          "description": "MCP servers for querying external project documentation",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "command",
+              "args"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name for this server (e.g., 'Backend API')"
+              },
+              "command": {
+                "type": "string",
+                "description": "Command to run (usually 'node')"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments: [path/to/mcp-server/index.js, path/to/project]"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether this server is enabled"
+              }
+            }
+          }
         }
       }
     }
@@ -159,6 +209,7 @@
     "@babel/parser": "^7.23.0",
     "@babel/traverse": "^7.23.0",
     "@babel/types": "^7.23.0",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "@types/dagre": "^0.7.53",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",

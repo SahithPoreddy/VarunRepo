@@ -9,6 +9,7 @@ import { getLiteLLMService } from './llm/litellmService';
 import { GitWatcher } from './git/gitWatcher';
 import { FileHashCache } from './cache/fileHashCache';
 import { getHooksManager, GitHooksManager } from './git/hooksManager';
+import { getMCPClientManager, disposeMCPClientManager } from './mcp/mcpClientManager';
 
 let visualizationPanel: VisualizationPanelReact | undefined;
 let workspaceAnalyzer: WorkspaceAnalyzer;
@@ -264,6 +265,30 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  // MCP Commands
+  const mcpManager = getMCPClientManager();
+
+  const showMCPStatusCommand = vscode.commands.registerCommand(
+    'codebaseVisualizer.showMCPStatus',
+    async () => {
+      await mcpManager.showStatus();
+    }
+  );
+
+  const connectMCPServersCommand = vscode.commands.registerCommand(
+    'codebaseVisualizer.connectMCPServers',
+    async () => {
+      await mcpManager.connectAll();
+    }
+  );
+
+  const disconnectMCPServersCommand = vscode.commands.registerCommand(
+    'codebaseVisualizer.disconnectMCPServers',
+    async () => {
+      await mcpManager.disconnectAll();
+    }
+  );
+
   context.subscriptions.push(
     showVisualizationCommand,
     refreshVisualizationCommand,
@@ -273,6 +298,10 @@ export async function activate(context: vscode.ExtensionContext) {
     generateDocsWithAICommand,
     installGitHooksCommand,
     uninstallGitHooksCommand,
+    showMCPStatusCommand,
+    connectMCPServersCommand,
+    disconnectMCPServersCommand,
+    { dispose: () => disposeMCPClientManager() },
     logger
   );
 

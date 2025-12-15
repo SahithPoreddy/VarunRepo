@@ -1,33 +1,24 @@
 {
-  "name": "codebase-visualizer-mcp",
+  "name": "doc-sync-mcp-server",
   "version": "1.0.0",
-  "description": "MCP Server for Codebase Visualizer - Exposes codebase documentation tools to AI agents",
-  "main": "dist/index.js",
+  "description": "MCP Server for exposing .doc_sync documentation to AI agents",
+  "main": "index.js",
   "type": "module",
   "bin": {
-    "codebase-visualizer-mcp": "./dist/index.js"
+    "doc-sync-mcp": "./index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc --watch",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
   },
   "keywords": [
     "mcp",
-    "model-context-protocol",
-    "codebase",
     "documentation",
-    "ai-agent"
+    "cline",
+    "ai"
   ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.10.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
-  }
+  "license": "MIT"
 }

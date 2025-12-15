@@ -757,17 +757,57 @@ export class VisualizationPanelReact {
         loading: true
       });
 
-      // Get answer from RAG service
-      console.log('Calling RAG service...');
+      // Search both local and external MCP servers
+      console.log('Searching local and external sources...');
+      const { local: localResults, external: externalResults } = 
+        await this.ragService.searchWithExternal(question, 5);
+      
+      // Build combined context for LLM
+      let contextParts: string[] = [];
+      
+      // Add local results
+      if (localResults.length > 0) {
+        contextParts.push('## Current Project Results:\n');
+        for (const result of localResults) {
+          const name = result.metadata?.name || 'Unknown';
+          const type = result.metadata?.type || 'unknown';
+          const summary = result.metadata?.aiSummary || result.content?.substring(0, 200) || '';
+          contextParts.push(`- **${name}** (${type}): ${summary}\n`);
+        }
+      }
+      
+      // Add external results
+      for (const { source, results } of externalResults) {
+        if (results.length > 0) {
+          contextParts.push(`\n## ${source} Results:\n`);
+          for (const result of results.slice(0, 5)) {
+            contextParts.push(`- **${result.name}** (${result.type}): ${result.summary || ''}\n`);
+          }
+        }
+      }
+
+      // Get answer from RAG service (will use combined context)
+      console.log('Calling RAG service with context...');
       const result = await this.ragService.answerQuestion(question);
+      
+      // Append external project info if available
+      let enhancedAnswer = result.answer;
+      if (externalResults.length > 0 && externalResults.some(e => e.results.length > 0)) {
+        const externalSources = externalResults
+          .filter(e => e.results.length > 0)
+          .map(e => e.source);
+        enhancedAnswer += `\n\n---\n*Also searched: ${externalSources.join(', ')}*`;
+      }
+      
       console.log('RAG service returned:', result.answer?.substring(0, 100));
 
       // Send answer back to webview
       this.panel?.webview.postMessage({
         command: 'questionAnswer',
-        answer: result.answer,
+        answer: enhancedAnswer,
         relevantNodes: result.relevantNodes,
-        confidence: result.confidence
+        confidence: result.confidence,
+        externalSources: externalResults.filter(e => e.results.length > 0).map(e => e.source)
       });
     } catch (error) {
       console.error('Error answering question:', error);
@@ -940,6 +980,9 @@ export class VisualizationPanelReact {
     const scriptUri = this.panel!.webview.asWebviewUri(
       vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.js')
     );
+    
+    console.log('Webview script URI:', scriptUri.toString());
+    console.log('Extension URI:', this.context.extensionUri.toString());
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -965,11 +1008,34 @@ export class VisualizationPanelReact {
       height: 100vh;
       overflow: hidden;
     }
+    
+    .loading-error {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #666;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script src="${scriptUri}"></script>
+  <div id="root">
+    <div class="loading-error">
+      <p>Loading visualization...</p>
+      <p style="font-size: 12px; margin-top: 8px; color: #999;">If this persists, check Developer Tools (Help → Toggle Developer Tools)</p>
+    </div>
+  </div>
+  <script>
+    console.log('Webview HTML loaded, attempting to load script...');
+    window.onerror = function(msg, url, line, col, error) {
+      console.error('Webview error:', msg, url, line, col, error);
+      document.getElementById('root').innerHTML = '<div class="loading-error"><p style="color: red;">Error loading: ' + msg + '</p></div>';
+      return false;
+    };
+  </script>
+  <script src="${scriptUri}" onerror="console.error('Failed to load webview.js from:', '${scriptUri}'); document.getElementById('root').innerHTML = '<div class=\\'loading-error\\'><p style=\\'color: red;\\'>Failed to load webview.js</p><p style=\\'font-size: 12px;\\'>Script: ${scriptUri}</p></div>';"></script>
 </body>
 </html>`;
   }

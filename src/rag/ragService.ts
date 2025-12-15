@@ -265,6 +265,56 @@ export class RAGService {
   }
 
   /**
+   * Search across local docs AND all connected MCP servers
+   * Returns combined results from current project + external projects
+   */
+  async searchWithExternal(query: string, topK: number = 5): Promise<{
+    local: SearchResult[];
+    external: Array<{ source: string; results: any[] }>;
+  }> {
+    // Import dynamically to avoid circular dependency
+    const { getMCPClientManager } = await import('../mcp/mcpClientManager');
+    const mcpManager = getMCPClientManager();
+
+    // Search local docs
+    let localResults: SearchResult[] = [];
+    try {
+      if (this.isInitialized) {
+        localResults = await this.search(query, topK);
+      }
+    } catch (error) {
+      console.log('Local search error:', error);
+    }
+
+    // Search external MCP servers (if connected)
+    const externalResults: Array<{ source: string; results: any[] }> = [];
+    
+    if (mcpManager.isConnected()) {
+      try {
+        const mcpResults = await mcpManager.searchAll(query);
+        
+        // Group by source
+        const bySource = new Map<string, any[]>();
+        for (const result of mcpResults) {
+          const source = result.source || 'Unknown';
+          if (!bySource.has(source)) {
+            bySource.set(source, []);
+          }
+          bySource.get(source)!.push(result);
+        }
+        
+        bySource.forEach((results, source) => {
+          externalResults.push({ source, results });
+        });
+      } catch (error) {
+        console.log('MCP search error:', error);
+      }
+    }
+
+    return { local: localResults, external: externalResults };
+  }
+
+  /**
    * Search using in-memory ChromaDB vector similarity
    */
   private searchInMemoryChroma(query: string, topK: number): SearchResult[] {
