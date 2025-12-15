@@ -10,6 +10,7 @@ import { GitWatcher } from './git/gitWatcher';
 import { FileHashCache } from './cache/fileHashCache';
 import { getHooksManager, GitHooksManager } from './git/hooksManager';
 import { getMCPClientManager, disposeMCPClientManager } from './mcp/mcpClientManager';
+import { getClineMCPManager } from './mcp/clineMCPManager';
 
 let visualizationPanel: VisualizationPanelReact | undefined;
 let workspaceAnalyzer: WorkspaceAnalyzer;
@@ -289,6 +290,23 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   );
 
+  // Cline MCP Configuration Commands
+  const clineMCPManager = getClineMCPManager();
+
+  const addToClineMCPCommand = vscode.commands.registerCommand(
+    'codebaseVisualizer.addToClineMCP',
+    async () => {
+      await clineMCPManager.addProjectToCline(context);
+    }
+  );
+
+  const removeFromClineMCPCommand = vscode.commands.registerCommand(
+    'codebaseVisualizer.removeFromClineMCP',
+    async () => {
+      await clineMCPManager.removeProjectFromCline();
+    }
+  );
+
   context.subscriptions.push(
     showVisualizationCommand,
     refreshVisualizationCommand,
@@ -301,6 +319,8 @@ export async function activate(context: vscode.ExtensionContext) {
     showMCPStatusCommand,
     connectMCPServersCommand,
     disconnectMCPServersCommand,
+    addToClineMCPCommand,
+    removeFromClineMCPCommand,
     { dispose: () => disposeMCPClientManager() },
     logger
   );

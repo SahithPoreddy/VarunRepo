@@ -75,6 +75,16 @@
         "command": "codebaseVisualizer.disconnectMCPServers",
         "title": "Disconnect MCP Servers",
         "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.addToClineMCP",
+        "title": "Add This Project to Cline MCP",
+        "category": "Codebase Visualizer"
+      },
+      {
+        "command": "codebaseVisualizer.removeFromClineMCP",
+        "title": "Remove Project from Cline MCP",
+        "category": "Codebase Visualizer"
       }
     ],
     "configuration": {
