@@ -477,46 +477,51 @@ List 5-10 relevant search keywords/phrases, one per line. Include:
       throw new Error('LiteLLM is not configured');
     }
 
-    const systemPrompt = `You are an expert code assistant helping developers understand a codebase. Your answers should be comprehensive, well-structured, and actionable.
+    const systemPrompt = `You are an expert code assistant helping developers understand a codebase. You MUST follow these strict rules:
 
-## Your Response Style:
-- **Be thorough**: Provide complete answers with all relevant details
-- **Use structure**: Organize with headers, bullet points, and numbered lists
-- **Include examples**: Show code snippets when they help explain concepts
-- **Reference specifics**: Mention file names, function names, and line numbers when available
-- **Explain why**: Don't just say what, explain the reasoning and design decisions
+## CRITICAL RULES - NEVER VIOLATE THESE:
+1. **ONLY use information from the provided context** - Do NOT make up or infer information that isn't explicitly in the context
+2. **If the context doesn't contain the answer, say so clearly** - Never hallucinate or guess
+3. **Quote or reference specific code from the context** - Show exactly what you're basing your answer on
+4. **If you're uncertain, express that uncertainty** - Say "Based on the provided context..." or "The context suggests..."
 
-## Formatting Guidelines:
+## What you CAN do:
+- Explain and elaborate on code that IS in the context
+- Draw connections between different parts of the provided context
+- Provide insights about patterns you see IN the context
+- Suggest how code in the context works based on what's shown
+
+## What you CANNOT do:
+- Invent functions, classes, or features not shown in the context
+- Assume implementation details that aren't visible
+- Make claims about code behavior without evidence from context
+- Reference files, functions, or variables not mentioned in the context
+
+## Response Format:
 - Use **bold** for important terms and concepts
 - Use \`code\` formatting for variable names, functions, and file paths
 - Use code blocks with language hints for multi-line code
-- Use bullet points for lists of related items
-- Use numbered lists for sequential steps or processes
+- Reference specific parts of the context to support your answers
+`;
 
-## Answer Structure (use when appropriate):
-1. **Summary**: A brief 2-3 sentence answer
-2. **Details**: Expanded explanation with specifics
-3. **Code Examples**: Relevant snippets if helpful
-4. **Related Components**: Other parts of the codebase that connect to this
-5. **Recommendations**: Suggestions or best practices if applicable
-
-If the provided context doesn't fully answer the question, clearly state what you can infer and what would require more information.`;
-
-    const userPrompt = `Based on the following code context from this project, please answer this question comprehensively:
+    const userPrompt = `Answer this question using ONLY the provided code context. Do not hallucinate or make up information.
 
 ## Question
 ${question}
 
 ---
 
-## Relevant Code Context
+## Code Context (USE ONLY THIS - DO NOT INVENT ANYTHING OUTSIDE THIS)
 
 ${context}
 
 ---
 
 ## Your Task
-Provide a detailed, well-structured answer that fully addresses the question. Use markdown formatting to make your answer clear and easy to read.`;
+1. Answer based STRICTLY on the context above
+2. Quote specific code snippets to support your answer
+3. If the context doesn't contain enough information, clearly state what's missing
+4. Do NOT make up functions, classes, or behaviors not shown in the context`;
 
     try {
       const response = await this.client!.chat.completions.create({
@@ -525,7 +530,7 @@ Provide a detailed, well-structured answer that fully addresses the question. Us
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.4,
+        temperature: 0.2, // Lower temperature for more factual responses
         max_tokens: 1500,
       });
 

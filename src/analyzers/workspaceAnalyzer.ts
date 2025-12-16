@@ -3,6 +3,7 @@ import { CodeGraph, CodeNode, CodeEdge, AnalysisResult, AnalysisError } from '..
 import { JavaAstParser } from '../parsers/javaAstParser';
 import { ReactParser } from '../parsers/reactParser';
 import { PythonAstParser } from '../parsers/pythonAstParser';
+import { AngularParser } from '../parsers/angularParser';
 import { GraphBuilder } from '../graph/graphBuilder';
 import { EntryPointDetector } from './entryPointDetector';
 import { ImportAnalyzer } from './importAnalyzer';
@@ -12,6 +13,7 @@ export class WorkspaceAnalyzer {
   private javaAstParser: JavaAstParser;
   private reactParser: ReactParser;
   private pythonAstParser: PythonAstParser;
+  private angularParser: AngularParser;
   private graphBuilder: GraphBuilder;
   private entryPointDetector: EntryPointDetector;
   private importAnalyzer: ImportAnalyzer;
@@ -25,6 +27,7 @@ export class WorkspaceAnalyzer {
     this.javaAstParser = new JavaAstParser();
     this.reactParser = new ReactParser();
     this.pythonAstParser = new PythonAstParser();
+    this.angularParser = new AngularParser();
     this.graphBuilder = new GraphBuilder();
     this.entryPointDetector = new EntryPointDetector();
     this.importAnalyzer = new ImportAnalyzer();
@@ -126,8 +129,21 @@ export class WorkspaceAnalyzer {
             // Use AST parser for Java (better for Spring Boot)
             result = await this.javaAstParser.parse(fileUri, isEntryPointFile);
           } else if (['.tsx', '.jsx', '.ts', '.js'].includes(ext)) {
-            // Pass isEntryPoint flag to create module node for files like main.tsx
-            result = await this.reactParser.parse(fileUri, isEntryPointFile);
+            // Check if this is an Angular file
+            const document = await vscode.workspace.openTextDocument(fileUri);
+            const content = document.getText();
+            const isAngularFile = content.includes('@Component') || 
+                                  content.includes('@NgModule') || 
+                                  content.includes('@Injectable') ||
+                                  content.includes('@angular/core');
+            
+            if (isAngularFile) {
+              // Use Angular parser for Angular files
+              result = await this.angularParser.parse(fileUri, isEntryPointFile);
+            } else {
+              // Use React parser for React/vanilla JS files
+              result = await this.reactParser.parse(fileUri, isEntryPointFile);
+            }
           } else if (ext === '.py') {
             // Use AST parser for Python (better hierarchy)
             result = await this.pythonAstParser.parse(fileUri, isEntryPointFile);
@@ -190,79 +206,410 @@ export class WorkspaceAnalyzer {
         console.log(`AST-detected Spring Boot Application: ${node.label}`);
       }
 
-      // Step 6.5: Create hierarchical 'contains' edges from entry points to imported files
-      // This creates the tree structure: Entry -> Components it uses
+      // Step 6.5: Mark entry points but DON'T create import-based contains edges
+      // The graph should only show natural parent-child relationships (class contains methods, etc.)
+      // Import relationships make the graph too complex
       const primaryEntryNode = allNodes.find(n => n.isPrimaryEntry);
       const entryNodes = allNodes.filter(n => n.isEntryPoint);
 
-      if (primaryEntryNode) {
-        // Primary entry contains other entry points
-        for (const entryNode of entryNodes) {
-          if (entryNode.id !== primaryEntryNode.id) {
-            // Check if primary imports this file
-            const primaryDeps = dependencyMap.get(primaryEntryNode.filePath) || [];
-            if (primaryDeps.includes(entryNode.filePath)) {
-              allEdges.push({
-                from: primaryEntryNode.id,
-                to: entryNode.id,
-                type: 'contains',
-                label: 'renders'
-              });
-            }
+      // Note: We no longer create 'contains' edges from imports for React/JS files
+      // The parser already creates proper parent-child edges (component contains functions, etc.)
+
+      // Step 6.6: Create Spring Boot layer hierarchy (Main → Controllers → Services → Repositories)
+      // Detect layers from node documentation/description
+      const getSpringLayer = (node: CodeNode): string | null => {
+        const desc = node.documentation?.description || '';
+        if (desc.includes('[application]') || desc.includes('@SpringBootApplication')) return 'application';
+        if (desc.includes('[controller]') || desc.includes('@Controller') || desc.includes('@RestController')) return 'controller';
+        if (desc.includes('[service]') || desc.includes('@Service')) return 'service';
+        if (desc.includes('[repository]') || desc.includes('@Repository')) return 'repository';
+        if (desc.includes('[entity]') || desc.includes('@Entity')) return 'entity';
+        if (desc.includes('[component]') || desc.includes('@Component')) return 'component';
+        return null;
+      };
+
+      // Group Java class nodes by their Spring layer
+      const javaClassNodes = allNodes.filter(n => 
+        n.language === 'java' && 
+        (n.type === 'class' || n.type === 'interface') &&
+        !n.parentId // Only top-level classes
+      );
+
+      const layerGroups: { [key: string]: CodeNode[] } = {
+        application: [],
+        controller: [],
+        service: [],
+        repository: [],
+        entity: [],
+        component: []
+      };
+
+      for (const node of javaClassNodes) {
+        const layer = getSpringLayer(node);
+        if (layer && layerGroups[layer]) {
+          layerGroups[layer].push(node);
+        }
+      }
+
+      console.log(`Spring Boot layers detected: Application=${layerGroups.application.length}, Controllers=${layerGroups.controller.length}, Services=${layerGroups.service.length}, Repositories=${layerGroups.repository.length}`);
+
+      // Create hierarchy: Application → Controllers → Services → Repositories → Entities
+      const layerHierarchy = ['application', 'controller', 'service', 'repository', 'entity'];
+      
+      // Create edges from Application/Main to Controllers
+      for (const appNode of layerGroups.application) {
+        for (const controllerNode of layerGroups.controller) {
+          const edgeExists = allEdges.some(e => 
+            e.from === appNode.id && e.to === controllerNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: appNode.id,
+              to: controllerNode.id,
+              type: 'contains',
+              label: 'manages'
+            });
           }
         }
-
-        // Primary entry also contains components from imported files
-        const primaryDeps = dependencyMap.get(primaryEntryNode.filePath) || [];
-        for (const depPath of primaryDeps) {
-          const componentsInDep = allNodes.filter(n =>
-            n.filePath === depPath &&
-            (n.type === 'component' || n.type === 'class' || n.type === 'module')
+        // Also connect components directly to application
+        for (const compNode of layerGroups.component) {
+          const edgeExists = allEdges.some(e => 
+            e.from === appNode.id && e.to === compNode.id && e.type === 'contains'
           );
-          for (const comp of componentsInDep) {
-            // Avoid duplicate edges
-            const edgeExists = allEdges.some(e =>
-              e.from === primaryEntryNode.id && e.to === comp.id && e.type === 'contains'
+          if (!edgeExists) {
+            allEdges.push({
+              from: appNode.id,
+              to: compNode.id,
+              type: 'contains',
+              label: 'manages'
+            });
+          }
+        }
+      }
+
+      // Create edges from Controllers to Services
+      for (const controllerNode of layerGroups.controller) {
+        for (const serviceNode of layerGroups.service) {
+          const edgeExists = allEdges.some(e => 
+            e.from === controllerNode.id && e.to === serviceNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: controllerNode.id,
+              to: serviceNode.id,
+              type: 'contains',
+              label: 'calls'
+            });
+          }
+        }
+      }
+
+      // Create edges from Services to Repositories
+      for (const serviceNode of layerGroups.service) {
+        for (const repoNode of layerGroups.repository) {
+          const edgeExists = allEdges.some(e => 
+            e.from === serviceNode.id && e.to === repoNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: serviceNode.id,
+              to: repoNode.id,
+              type: 'contains',
+              label: 'uses'
+            });
+          }
+        }
+      }
+
+      // Create edges from Repositories to Entities
+      for (const repoNode of layerGroups.repository) {
+        for (const entityNode of layerGroups.entity) {
+          const edgeExists = allEdges.some(e => 
+            e.from === repoNode.id && e.to === entityNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: repoNode.id,
+              to: entityNode.id,
+              type: 'contains',
+              label: 'manages'
+            });
+          }
+        }
+      }
+
+      // Step 6.7: Create Python/FastAPI layer hierarchy (Main → Routers → Services → Models)
+      const getPythonLayer = (node: CodeNode): string | null => {
+        const desc = node.documentation?.description || '';
+        const sourceCode = node.sourceCode || '';
+        
+        // FastAPI app detection
+        if (sourceCode.includes('FastAPI()') || desc.includes('[endpoint]') || node.label?.toLowerCase().includes('main')) {
+          if (sourceCode.includes('FastAPI()')) return 'fastapi_app';
+        }
+        // Router/endpoint detection
+        if (desc.includes('[endpoint]') || desc.includes('@router') || desc.includes('@app.')) return 'router';
+        // Service layer detection
+        if (node.label?.toLowerCase().includes('service') || desc.includes('[dependency]')) return 'service';
+        // Model/Schema detection
+        if (desc.includes('[model]') || desc.includes('[schema]') || desc.includes('BaseModel')) return 'model';
+        // Database/Repository detection  
+        if (node.label?.toLowerCase().includes('repository') || node.label?.toLowerCase().includes('crud')) return 'repository';
+        return null;
+      };
+
+      // Group Python class/module nodes by their FastAPI layer
+      const pythonNodes = allNodes.filter(n => 
+        n.language === 'python' && 
+        (n.type === 'class' || n.type === 'module' || n.type === 'function') &&
+        !n.parentId // Only top-level elements
+      );
+
+      const pythonLayerGroups: { [key: string]: CodeNode[] } = {
+        fastapi_app: [],
+        router: [],
+        service: [],
+        repository: [],
+        model: []
+      };
+
+      for (const node of pythonNodes) {
+        const layer = getPythonLayer(node);
+        if (layer && pythonLayerGroups[layer]) {
+          pythonLayerGroups[layer].push(node);
+        }
+      }
+
+      console.log(`FastAPI layers detected: App=${pythonLayerGroups.fastapi_app.length}, Routers=${pythonLayerGroups.router.length}, Services=${pythonLayerGroups.service.length}, Models=${pythonLayerGroups.model.length}`);
+
+      // Create FastAPI hierarchy: App → Routers → Services → Repositories → Models
+      for (const appNode of pythonLayerGroups.fastapi_app) {
+        for (const routerNode of pythonLayerGroups.router) {
+          const edgeExists = allEdges.some(e => 
+            e.from === appNode.id && e.to === routerNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: appNode.id,
+              to: routerNode.id,
+              type: 'contains',
+              label: 'includes'
+            });
+          }
+        }
+      }
+
+      // Routers → Services
+      for (const routerNode of pythonLayerGroups.router) {
+        for (const serviceNode of pythonLayerGroups.service) {
+          const edgeExists = allEdges.some(e => 
+            e.from === routerNode.id && e.to === serviceNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: routerNode.id,
+              to: serviceNode.id,
+              type: 'contains',
+              label: 'calls'
+            });
+          }
+        }
+      }
+
+      // Services → Repositories
+      for (const serviceNode of pythonLayerGroups.service) {
+        for (const repoNode of pythonLayerGroups.repository) {
+          const edgeExists = allEdges.some(e => 
+            e.from === serviceNode.id && e.to === repoNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: serviceNode.id,
+              to: repoNode.id,
+              type: 'contains',
+              label: 'uses'
+            });
+          }
+        }
+      }
+
+      // Repositories/Services → Models
+      for (const repoNode of [...pythonLayerGroups.repository, ...pythonLayerGroups.service]) {
+        for (const modelNode of pythonLayerGroups.model) {
+          const edgeExists = allEdges.some(e => 
+            e.from === repoNode.id && e.to === modelNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: repoNode.id,
+              to: modelNode.id,
+              type: 'contains',
+              label: 'uses'
+            });
+          }
+        }
+      }
+
+      // Step 6.8: Create React/JS hierarchy based on imports (index.js → children)
+      // Find React entry point and create hierarchy from imports
+      const reactEntryNode = allNodes.find(n => 
+        (n.language === 'typescript' || n.language === 'javascript') &&
+        n.type === 'module' &&
+        n.isEntryPoint
+      );
+
+      if (reactEntryNode && dependencyMap.size > 0) {
+        console.log(`Building React hierarchy from entry: ${reactEntryNode.label}`);
+        
+        // Build import tree using BFS from entry point
+        const visited = new Set<string>();
+        const queue: { nodeId: string; parentNodeId: string | null }[] = [];
+        
+        // Start with entry file
+        visited.add(reactEntryNode.filePath);
+        const entryDeps = dependencyMap.get(reactEntryNode.filePath) || [];
+        
+        for (const depPath of entryDeps) {
+          queue.push({ nodeId: depPath, parentNodeId: reactEntryNode.id });
+        }
+
+        while (queue.length > 0) {
+          const { nodeId: filePath, parentNodeId } = queue.shift()!;
+          
+          if (visited.has(filePath)) continue; // Skip already visited (prevents circular deps)
+          visited.add(filePath);
+
+          // Find the module node for this file
+          const childModuleNode = allNodes.find(n => 
+            n.filePath === filePath && 
+            n.type === 'module' &&
+            !n.parentId
+          );
+
+          if (childModuleNode && parentNodeId) {
+            // Create parent-child edge
+            const edgeExists = allEdges.some(e => 
+              e.from === parentNodeId && e.to === childModuleNode.id && e.type === 'contains'
             );
             if (!edgeExists) {
               allEdges.push({
-                from: primaryEntryNode.id,
-                to: comp.id,
+                from: parentNodeId,
+                to: childModuleNode.id,
                 type: 'contains',
                 label: 'imports'
               });
+              console.log(`React hierarchy: ${parentNodeId} -> ${childModuleNode.label}`);
+            }
+
+            // Add this file's dependencies to queue (no depth limit - user can expand as needed)
+            const childDeps = dependencyMap.get(filePath) || [];
+            for (const depPath of childDeps) {
+              if (!visited.has(depPath)) {
+                queue.push({ nodeId: depPath, parentNodeId: childModuleNode.id });
+              }
             }
           }
         }
       }
 
-      // Create contains edges for all import relationships
-      for (const [filePath, deps] of dependencyMap.entries()) {
-        const sourceNodes = allNodes.filter(n =>
-          n.filePath === filePath &&
-          (n.type === 'component' || n.type === 'class' || n.type === 'module' || n.isEntryPoint || n.type === 'function')
-        );
+      // Step 6.9: Create Angular hierarchy (NgModule → Components → Services)
+      const getAngularLayer = (node: CodeNode): string | null => {
+        const desc = node.documentation?.description || '';
+        if (desc.includes('[ngmodule]') || desc.includes('@NgModule')) return 'ngmodule';
+        if (desc.includes('[component]') || desc.includes('@Component')) return 'component';
+        if (desc.includes('[service]') || desc.includes('@Injectable')) return 'service';
+        if (desc.includes('[directive]') || desc.includes('@Directive')) return 'directive';
+        if (desc.includes('[pipe]') || desc.includes('@Pipe')) return 'pipe';
+        if (desc.includes('[guard]')) return 'guard';
+        if (desc.includes('[entry]')) return 'entry';
+        return null;
+      };
 
-        for (const sourceNode of sourceNodes) {
-          for (const depPath of deps) {
-            const targetNodes = allNodes.filter(n =>
-              n.filePath === depPath &&
-              (n.type === 'component' || n.type === 'class' || n.type === 'function' || n.type === 'module')
-            );
+      // Group Angular nodes by their layer
+      const angularNodes = allNodes.filter(n => 
+        n.language === 'typescript' &&
+        (n.type === 'module' || n.type === 'component' || n.type === 'class') &&
+        getAngularLayer(n) !== null
+      );
 
-            for (const targetNode of targetNodes) {
-              const edgeExists = allEdges.some(e =>
-                e.from === sourceNode.id && e.to === targetNode.id && e.type === 'contains'
-              );
-              if (!edgeExists) {
-                allEdges.push({
-                  from: sourceNode.id,
-                  to: targetNode.id,
-                  type: 'contains',
-                  label: 'uses'
-                });
-              }
-            }
+      const angularLayerGroups: { [key: string]: CodeNode[] } = {
+        entry: [],
+        ngmodule: [],
+        component: [],
+        service: [],
+        directive: [],
+        pipe: [],
+        guard: []
+      };
+
+      for (const node of angularNodes) {
+        const layer = getAngularLayer(node);
+        if (layer && angularLayerGroups[layer]) {
+          angularLayerGroups[layer].push(node);
+        }
+      }
+
+      console.log(`Angular layers detected: Entry=${angularLayerGroups.entry.length}, NgModules=${angularLayerGroups.ngmodule.length}, Components=${angularLayerGroups.component.length}, Services=${angularLayerGroups.service.length}`);
+
+      // Create Angular hierarchy: Entry → NgModule → Components/Services/Directives/Pipes
+      // Entry → NgModules
+      for (const entryNode of angularLayerGroups.entry) {
+        for (const ngModuleNode of angularLayerGroups.ngmodule) {
+          const edgeExists = allEdges.some(e => 
+            e.from === entryNode.id && e.to === ngModuleNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: entryNode.id,
+              to: ngModuleNode.id,
+              type: 'contains',
+              label: 'bootstraps'
+            });
+          }
+        }
+      }
+
+      // NgModules → Components, Directives, Pipes
+      for (const ngModuleNode of angularLayerGroups.ngmodule) {
+        for (const compNode of [...angularLayerGroups.component, ...angularLayerGroups.directive, ...angularLayerGroups.pipe]) {
+          const edgeExists = allEdges.some(e => 
+            e.from === ngModuleNode.id && e.to === compNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: ngModuleNode.id,
+              to: compNode.id,
+              type: 'contains',
+              label: 'declares'
+            });
+          }
+        }
+        // NgModules → Services
+        for (const serviceNode of angularLayerGroups.service) {
+          const edgeExists = allEdges.some(e => 
+            e.from === ngModuleNode.id && e.to === serviceNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: ngModuleNode.id,
+              to: serviceNode.id,
+              type: 'contains',
+              label: 'provides'
+            });
+          }
+        }
+        // NgModules → Guards
+        for (const guardNode of angularLayerGroups.guard) {
+          const edgeExists = allEdges.some(e => 
+            e.from === ngModuleNode.id && e.to === guardNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: ngModuleNode.id,
+              to: guardNode.id,
+              type: 'contains',
+              label: 'provides'
+            });
           }
         }
       }

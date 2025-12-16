@@ -193,25 +193,13 @@ export class PythonAstParser {
           });
         }
 
-        // Add inheritance edges for classes
-        if (element.bases) {
-          for (const base of element.bases) {
-            const baseId = classMap.get(base);
-            edges.push({
-              from: node.id,
-              to: baseId || `external:${base}`,
-              type: 'extends',
-              label: `extends ${base}`
-            });
-          }
-        }
+        // Note: We skip inheritance edges here to keep the graph clean
+        // Only 'contains' edges are created for parent-child relationships
       }
 
-      // Extract import relationships
-      this.extractImports(edges);
-
-      // Detect and add framework-specific edges
-      this.extractFrameworkDependencies(allElements, edges);
+      // Note: We removed extractImports and extractFrameworkDependencies
+      // to keep the graph showing only parent-child (contains) relationships
+      // Import relationships make the graph too complex
 
       return { nodes, edges };
     } catch (error) {

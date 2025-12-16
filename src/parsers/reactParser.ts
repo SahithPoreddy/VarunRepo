@@ -15,6 +15,9 @@ export class ReactParser {
     
     const nodes: CodeNode[] = [];
     const edges: CodeEdge[] = [];
+    const filePath = fileUri.fsPath;
+    const fileName = filePath.split(/[\\/]/).pop() || 'module';
+    const baseName = fileName.replace(/\.(tsx?|jsx?)$/, '');
 
     try {
       // Parse with Babel
@@ -28,76 +31,92 @@ export class ReactParser {
         ]
       });
 
+      // Always create a file-level module node for proper hierarchy
+      const moduleNode = this.createModuleNode(fileUri, content, baseName, isEntryPoint);
+      nodes.push(moduleNode);
+
       // Traverse AST
       traverse(ast, {
         // React Function Components
         FunctionDeclaration: (path: any) => {
           const node = path.node;
           if (this.isReactComponent(node, content)) {
-            nodes.push(this.createComponentNode(node, fileUri, 'function', content));
+            const compNode = this.createComponentNode(node, fileUri, 'function', content, moduleNode.id);
+            nodes.push(compNode);
           } else {
-            nodes.push(this.createFunctionNode(node, fileUri, content));
+            const funcNode = this.createFunctionNode(node, fileUri, content, moduleNode.id);
+            nodes.push(funcNode);
           }
         },
 
-        // Arrow Function Components
+        // Arrow Function Components and regular arrow functions
         VariableDeclarator: (path: any) => {
           const node = path.node;
           if (node.init && (node.init.type === 'ArrowFunctionExpression' || node.init.type === 'FunctionExpression')) {
             if (this.isReactComponent(node.init, content)) {
-              nodes.push(this.createComponentNode(node, fileUri, 'arrow', content));
+              const compNode = this.createComponentNode(node, fileUri, 'arrow', content, moduleNode.id);
+              nodes.push(compNode);
+            } else if (node.id?.name) {
+              // Create node for arrow function (not a component)
+              const funcNode = this.createArrowFunctionNode(node, fileUri, content, moduleNode.id);
+              nodes.push(funcNode);
             }
           }
         },
 
-        // Class Components
+        // Class Components and regular classes
         ClassDeclaration: (path: any) => {
           const node = path.node;
-          if (this.isReactClassComponent(node)) {
-            nodes.push(this.createClassComponentNode(node, fileUri, content));
-          }
+          const classNode = this.createClassNode(node, fileUri, content, moduleNode.id, this.isReactClassComponent(node));
+          nodes.push(classNode);
         },
 
-        // Import statements for edges
-        ImportDeclaration: (path: any) => {
+        // Interface declarations
+        TSInterfaceDeclaration: (path: any) => {
           const node = path.node;
-          // Create import edges
-          // Will be processed later
+          const interfaceNode = this.createInterfaceNode(node, fileUri, content, moduleNode.id);
+          nodes.push(interfaceNode);
+        },
+
+        // Type aliases
+        TSTypeAliasDeclaration: (path: any) => {
+          const node = path.node;
+          const typeNode = this.createTypeNode(node, fileUri, content, moduleNode.id);
+          nodes.push(typeNode);
         }
       });
 
-      // If no nodes were created but this is an entry file (like main.tsx),
-      // create a module node for the entire file
-      if (nodes.length === 0) {
-        const fileName = fileUri.fsPath.split(/[\\/]/).pop() || 'module';
-        const baseName = fileName.replace(/\.(tsx?|jsx?)$/, '');
-        
-        // Check if this looks like an entry file (has ReactDOM.render or createRoot)
-        const isBootstrapFile = content.includes('createRoot') || 
-                                content.includes('ReactDOM.render') ||
-                                content.includes('render(');
-        
-        if (isBootstrapFile || isEntryPoint) {
-          nodes.push(this.createModuleNode(fileUri, content, baseName));
+      // Create parent-child edges from module to all top-level elements
+      nodes.forEach(node => {
+        if (node.id !== moduleNode.id && node.parentId === moduleNode.id) {
+          edges.push({
+            from: moduleNode.id,
+            to: node.id,
+            type: 'contains',
+            label: 'contains'
+          });
         }
-      }
-
-      // Extract relationships
-      this.extractRelationships(ast, nodes, edges);
+      });
 
       return { nodes, edges };
     } catch (error) {
       console.error(`Failed to parse ${fileUri.fsPath}:`, error);
-      return { nodes: [], edges: [] };
+      // Return just the module node on parse error
+      const moduleNode = this.createModuleNode(fileUri, content, baseName, isEntryPoint);
+      return { nodes: [moduleNode], edges: [] };
     }
   }
 
   /**
-   * Create a module node for files like main.tsx that don't contain components
-   * but are entry points
+   * Create a module node for the file
    */
-  private createModuleNode(fileUri: vscode.Uri, content: string, name: string): CodeNode {
+  private createModuleNode(fileUri: vscode.Uri, content: string, name: string, isEntryPoint: boolean = false): CodeNode {
     const lines = content.split('\n');
+    
+    // Check if this looks like an entry file
+    const isBootstrapFile = content.includes('createRoot') || 
+                            content.includes('ReactDOM.render') ||
+                            content.includes('render(');
     
     return {
       id: `${fileUri.fsPath}:module:${name}`,
@@ -107,18 +126,99 @@ export class ReactParser {
       filePath: fileUri.fsPath,
       startLine: 1,
       endLine: lines.length,
-      sourceCode: content,
-      isEntryPoint: true,
+      sourceCode: content.substring(0, 500), // First 500 chars for preview
+      isEntryPoint: isEntryPoint || isBootstrapFile,
       documentation: {
-        summary: `Entry point module ${name}`,
-        description: `Application bootstrap file that initializes React and renders the root component`,
+        summary: `Module ${name}`,
+        description: isBootstrapFile ? 'Application bootstrap file' : `Module containing React components and utilities`,
         persona: {
-          'developer': `Entry point that bootstraps the application. Contains ReactDOM.createRoot() or render() call.`,
-          'product-manager': `Application entry point - where the app starts`,
-          'architect': `Bootstrap module following React 18 patterns`,
-          'business-analyst': `Application initialization`
+          'developer': `Module ${name} with exported components and functions`,
+          'product-manager': `UI module for application features`,
+          'architect': `React module following component-based architecture`,
+          'business-analyst': `Application module`
         }
       }
+    };
+  }
+
+  /**
+   * Create a node for arrow functions that aren't React components
+   */
+  private createArrowFunctionNode(node: any, fileUri: vscode.Uri, content: string, parentId: string): CodeNode {
+    const name = node.id?.name || 'Anonymous';
+    
+    return {
+      id: `${fileUri.fsPath}:function:${name}:${node.loc?.start.line}`,
+      label: name,
+      type: 'function',
+      language: fileUri.fsPath.endsWith('.tsx') || fileUri.fsPath.endsWith('.ts') ? 'typescript' : 'javascript',
+      filePath: fileUri.fsPath,
+      startLine: node.loc?.start.line || 0,
+      endLine: node.loc?.end?.line || node.init?.loc?.end?.line || 0,
+      parentId,
+      sourceCode: this.extractSource(content, node.loc?.start.line, node.init?.loc?.end?.line || node.loc?.end?.line),
+      parameters: node.init?.params ? this.extractParameters(node.init) : [],
+      documentation: this.generateDocumentation(name, 'function')
+    };
+  }
+
+  /**
+   * Create a node for class declarations
+   */
+  private createClassNode(node: any, fileUri: vscode.Uri, content: string, parentId: string, isComponent: boolean): CodeNode {
+    const name = node.id?.name || 'Anonymous';
+    
+    return {
+      id: `${fileUri.fsPath}:class:${name}`,
+      label: name,
+      type: isComponent ? 'component' : 'class',
+      language: fileUri.fsPath.endsWith('.tsx') || fileUri.fsPath.endsWith('.ts') ? 'typescript' : 'javascript',
+      filePath: fileUri.fsPath,
+      startLine: node.loc?.start.line || 0,
+      endLine: node.loc?.end.line || 0,
+      parentId,
+      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
+      documentation: this.generateDocumentation(name, isComponent ? 'class component' : 'class')
+    };
+  }
+
+  /**
+   * Create a node for TypeScript interfaces
+   */
+  private createInterfaceNode(node: any, fileUri: vscode.Uri, content: string, parentId: string): CodeNode {
+    const name = node.id?.name || 'Anonymous';
+    
+    return {
+      id: `${fileUri.fsPath}:interface:${name}`,
+      label: name,
+      type: 'interface',
+      language: 'typescript',
+      filePath: fileUri.fsPath,
+      startLine: node.loc?.start.line || 0,
+      endLine: node.loc?.end.line || 0,
+      parentId,
+      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
+      documentation: this.generateDocumentation(name, 'interface')
+    };
+  }
+
+  /**
+   * Create a node for TypeScript type aliases
+   */
+  private createTypeNode(node: any, fileUri: vscode.Uri, content: string, parentId: string): CodeNode {
+    const name = node.id?.name || 'Anonymous';
+    
+    return {
+      id: `${fileUri.fsPath}:type:${name}`,
+      label: name,
+      type: 'interface', // Treat type aliases similar to interfaces for visualization
+      language: 'typescript',
+      filePath: fileUri.fsPath,
+      startLine: node.loc?.start.line || 0,
+      endLine: node.loc?.end.line || 0,
+      parentId,
+      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
+      documentation: this.generateDocumentation(name, 'type')
     };
   }
 
@@ -161,7 +261,7 @@ export class ReactParser {
     return false;
   }
 
-  private createComponentNode(node: any, fileUri: vscode.Uri, style: string, content: string): CodeNode {
+  private createComponentNode(node: any, fileUri: vscode.Uri, style: string, content: string, parentId: string): CodeNode {
     const name = node.id?.name || node.key?.name || 'Anonymous';
     const lines = content.split('\n');
     
@@ -172,15 +272,16 @@ export class ReactParser {
       language: fileUri.fsPath.endsWith('.tsx') || fileUri.fsPath.endsWith('.ts') ? 'typescript' : 'javascript',
       filePath: fileUri.fsPath,
       startLine: node.loc?.start.line || 0,
-      endLine: node.loc?.end.line || 0,
-      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
-      props: this.extractProps(node),
-      hooks: this.extractHooks(node),
+      endLine: node.loc?.end.line || node.init?.loc?.end?.line || 0,
+      parentId,
+      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line || node.init?.loc?.end?.line),
+      props: this.extractProps(node.init || node),
+      hooks: this.extractHooks(node.init || node),
       documentation: this.generateDocumentation(name, 'component')
     };
   }
 
-  private createFunctionNode(node: any, fileUri: vscode.Uri, content: string): CodeNode {
+  private createFunctionNode(node: any, fileUri: vscode.Uri, content: string, parentId: string): CodeNode {
     const name = node.id?.name || 'Anonymous';
     
     return {
@@ -191,25 +292,10 @@ export class ReactParser {
       filePath: fileUri.fsPath,
       startLine: node.loc?.start.line || 0,
       endLine: node.loc?.end.line || 0,
+      parentId,
       sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
       parameters: this.extractParameters(node),
       documentation: this.generateDocumentation(name, 'function')
-    };
-  }
-
-  private createClassComponentNode(node: any, fileUri: vscode.Uri, content: string): CodeNode {
-    const name = node.id?.name || 'Anonymous';
-    
-    return {
-      id: `${fileUri.fsPath}:class:${name}`,
-      label: name,
-      type: 'class',
-      language: fileUri.fsPath.endsWith('.tsx') || fileUri.fsPath.endsWith('.ts') ? 'typescript' : 'javascript',
-      filePath: fileUri.fsPath,
-      startLine: node.loc?.start.line || 0,
-      endLine: node.loc?.end.line || 0,
-      sourceCode: this.extractSource(content, node.loc?.start.line, node.loc?.end.line),
-      documentation: this.generateDocumentation(name, 'class')
     };
   }
 
@@ -253,83 +339,6 @@ export class ReactParser {
     if (!startLine || !endLine) return '';
     const lines = content.split('\n');
     return lines.slice(startLine - 1, endLine).join('\n');
-  }
-
-  private extractRelationships(ast: any, nodes: CodeNode[], edges: CodeEdge[]): void {
-    // Create hierarchical relationships between nodes
-    // Entry/Module nodes contain components
-    // Components contain functions defined within them
-    
-    const entryNodes = nodes.filter(n => n.type === 'module' || n.isEntryPoint);
-    const componentNodes = nodes.filter(n => n.type === 'component' || n.type === 'class');
-    const functionNodes = nodes.filter(n => n.type === 'function' || n.type === 'method');
-    
-    // Entry nodes contain components in the same file
-    entryNodes.forEach(entry => {
-      componentNodes.forEach(comp => {
-        if (comp.filePath === entry.filePath && comp.id !== entry.id) {
-          edges.push({
-            from: entry.id,
-            to: comp.id,
-            type: 'contains',
-            label: 'contains'
-          });
-        }
-      });
-      
-      // Entry nodes also contain standalone functions
-      functionNodes.forEach(func => {
-        if (func.filePath === entry.filePath) {
-          // Check if this function is already inside a component
-          const isInsideComponent = componentNodes.some(comp => 
-            comp.filePath === func.filePath &&
-            comp.startLine <= func.startLine &&
-            comp.endLine >= func.endLine
-          );
-          
-          if (!isInsideComponent) {
-            edges.push({
-              from: entry.id,
-              to: func.id,
-              type: 'contains',
-              label: 'contains'
-            });
-          }
-        }
-      });
-    });
-    
-    // Components contain functions defined within them (by line range)
-    componentNodes.forEach(comp => {
-      functionNodes.forEach(func => {
-        if (func.filePath === comp.filePath &&
-            func.startLine > comp.startLine &&
-            func.endLine < comp.endLine) {
-          edges.push({
-            from: comp.id,
-            to: func.id,
-            type: 'contains',
-            label: 'contains'
-          });
-        }
-      });
-    });
-    
-    // If no entry nodes, make component-to-component relationships based on imports
-    if (entryNodes.length === 0 && componentNodes.length > 0) {
-      // Sort by file path to create a reasonable hierarchy
-      const sortedComponents = [...componentNodes].sort((a, b) => 
-        a.filePath.localeCompare(b.filePath)
-      );
-      
-      // First component in each file can be considered a "root" for that file
-      const fileGroups = new Map<string, CodeNode[]>();
-      sortedComponents.forEach(comp => {
-        const group = fileGroups.get(comp.filePath) || [];
-        group.push(comp);
-        fileGroups.set(comp.filePath, group);
-      });
-    }
   }
 
   private generateDocumentation(name: string, type: string): any {

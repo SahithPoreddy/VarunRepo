@@ -2231,10 +2231,10 @@ const App = () => {
       }
     });
 
-    // Method 2: From edges - 'contains' means parent contains child
-    // Also consider 'calls' edges for function call hierarchy
+    // Method 2: From edges - only 'contains' means parent contains child
+    // Skip 'uses', 'imports', 'extends', 'implements' - only show hierarchical structure
     graphData.edges.forEach(edge => {
-      if (edge.type === 'contains' || edge.type === 'uses') {
+      if (edge.type === 'contains') {
         if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
           const children = map.get(edge.source) || [];
           if (!children.includes(edge.target)) {
@@ -2542,7 +2542,8 @@ const App = () => {
     console.log('Building edges. HighlightedNodeId:', highlightedNodeId, 'Highlighted edges:', Array.from(highlightedEdges));
     
     return data.edges
-      .filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
+      // Only show 'contains' relationships - hide uses, imports, extends, implements
+      .filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target) && edge.type === 'contains')
       .map((edge, index) => {
         const edgeKey = `${edge.source}-${edge.target}`;
         const isHighlighted = highlightedEdges.has(edgeKey);

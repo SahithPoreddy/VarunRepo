@@ -1,0 +1,48 @@
+# Source files (we bundle with webpack)
+src/**
+**/*.ts
+**/*.tsx
+
+# Development files
+.vscode/**
+.vscode-test/**
+**/*.map
+
+# Config files
+tsconfig.json
+webpack.config.js
+.eslintrc*
+.gitignore
+.gitattributes
+
+# Test files
+**/test/**
+**/*.test.ts
+**/*.test.js
+
+# Documentation (keep README)
+DEBUGGING_GUIDE.md
+GET_LOG_FILE.md
+HOW_TO_RUN.md
+IMPLEMENTATION_GUIDE.md
+IMPROVEMENTS_COMPLETE.md
+INSTALLATION_SUCCESS.md
+PROJECT_SUMMARY.md
+QUICKSTART.md
+
+# MCP Server - INCLUDE this folder (users need it for external project queries)
+# But exclude its node_modules - users run npm install themselves
+mcp-server/node_modules/**
+
+# Build artifacts we don't need
+**/*.js.map
+**/*.d.ts
+!dist/**
+
+# Main node_modules (bundled by webpack)
+node_modules/**
+
+# Other
+.git/**
+**/.DS_Store
+**/Thumbs.db
