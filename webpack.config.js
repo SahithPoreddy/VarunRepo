@@ -1,4 +1,5 @@
 const path = require('path');
+const webpack = require('webpack');
 
 const extensionConfig = {
     target: 'node',
@@ -80,6 +81,12 @@ const webviewConfig = {
     infrastructureLogging: {
         level: "log",
     },
+    plugins: [
+        new webpack.DefinePlugin({
+            'process.env': JSON.stringify({}),
+            'process.env.NODE_ENV': JSON.stringify('production')
+        })
+    ]
 };
 
 module.exports = [extensionConfig, webviewConfig];

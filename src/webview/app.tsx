@@ -28,59 +28,64 @@ marked.setOptions({
 // Markdown CSS styles to inject
 const markdownStyles = `
 .markdown-content {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.6;
   color: #e2e8f0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 .markdown-content h1, .markdown-content h2, .markdown-content h3, 
 .markdown-content h4, .markdown-content h5, .markdown-content h6 {
-  color: #64ffda;
-  margin: 12px 0 8px 0;
+  color: #94a3b8;
+  margin: 10px 0 6px 0;
   font-weight: 600;
 }
-.markdown-content h1 { font-size: 1.4em; }
-.markdown-content h2 { font-size: 1.25em; }
+.markdown-content h1 { font-size: 1.3em; }
+.markdown-content h2 { font-size: 1.2em; }
 .markdown-content h3 { font-size: 1.1em; }
 .markdown-content p {
-  margin: 8px 0;
+  margin: 6px 0;
 }
 .markdown-content code {
-  background: rgba(100, 255, 218, 0.1);
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: rgba(100, 116, 139, 0.2);
+  padding: 2px 5px;
+  border-radius: 3px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.9em;
-  color: #64ffda;
+  font-size: 0.85em;
+  color: #e2e8f0;
+  word-break: break-all;
 }
 .markdown-content pre {
   background: rgba(0, 0, 0, 0.3);
-  padding: 12px;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 6px;
   overflow-x: auto;
-  margin: 10px 0;
-  border: 1px solid rgba(100, 255, 218, 0.1);
+  margin: 8px 0;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  max-width: 100%;
 }
 .markdown-content pre code {
   background: transparent;
   padding: 0;
   color: #cbd5e1;
+  word-break: normal;
 }
 .markdown-content ul, .markdown-content ol {
-  margin: 8px 0;
-  padding-left: 24px;
+  margin: 6px 0;
+  padding-left: 20px;
 }
 .markdown-content li {
-  margin: 4px 0;
+  margin: 3px 0;
 }
 .markdown-content blockquote {
-  border-left: 3px solid #64ffda;
-  margin: 10px 0;
-  padding-left: 12px;
+  border-left: 2px solid #64748b;
+  margin: 8px 0;
+  padding-left: 10px;
   color: #94a3b8;
   font-style: italic;
 }
 .markdown-content a {
-  color: #64ffda;
+  color: #60a5fa;
   text-decoration: none;
 }
 .markdown-content a:hover {
@@ -89,15 +94,17 @@ const markdownStyles = `
 .markdown-content table {
   border-collapse: collapse;
   width: 100%;
-  margin: 10px 0;
+  margin: 8px 0;
+  display: block;
+  overflow-x: auto;
 }
 .markdown-content th, .markdown-content td {
   border: 1px solid #334155;
-  padding: 8px 12px;
+  padding: 6px 10px;
   text-align: left;
 }
 .markdown-content th {
-  background: rgba(100, 255, 218, 0.1);
+  background: rgba(100, 116, 139, 0.2);
   color: #64ffda;
 }
 .markdown-content hr {
@@ -182,7 +189,7 @@ const styles = {
   container: {
     width: '100vw',
     height: '100vh',
-    background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #cbd5e1 100%)',
+    background: '#f1f5f9',
     position: 'relative' as const,
     overflow: 'hidden',
   },
@@ -224,8 +231,7 @@ const styles = {
     backdropFilter: 'blur(10px)',
     borderRadius: '12px 12px 0 0',
     padding: '10px 16px',
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-    border: '1px solid rgba(100, 255, 218, 0.2)',
+    border: '1px solid rgba(100, 116, 139, 0.3)',
     borderBottom: 'none',
     color: '#e2e8f0',
     fontSize: '13px',
@@ -254,31 +260,29 @@ const styles = {
   statsOpenButton: {
     background: 'rgba(30, 41, 59, 0.95)',
     backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(100, 255, 218, 0.2)',
+    border: '1px solid rgba(100, 116, 139, 0.3)',
     borderRadius: '8px',
     padding: '8px 12px',
-    color: '#64ffda',
+    color: '#94a3b8',
     cursor: 'pointer',
     fontSize: '14px',
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
     transition: 'all 0.2s ease',
   },
   copilotButton: {
-    background: 'linear-gradient(135deg, #f472b6 0%, #ec4899 100%)',
-    border: 'none',
-    borderRadius: '12px',
+    background: 'rgba(30, 41, 59, 0.95)',
+    border: '1px solid rgba(100, 116, 139, 0.3)',
+    borderRadius: '8px',
     padding: '10px 16px',
-    color: '#ffffff',
+    color: '#e2e8f0',
     cursor: 'pointer',
     fontSize: '13px',
-    fontWeight: 600,
+    fontWeight: 500,
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    boxShadow: '0 4px 16px rgba(236, 72, 153, 0.4)',
     transition: 'all 0.2s ease',
   },
   statsPanelToggle: {
@@ -298,8 +302,7 @@ const styles = {
     backdropFilter: 'blur(10px)',
     borderRadius: '0 0 12px 12px',
     padding: '16px 20px',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-    border: '1px solid rgba(100, 255, 218, 0.2)',
+    border: '1px solid rgba(100, 116, 139, 0.3)',
     borderTop: 'none',
     color: '#e2e8f0',
     fontSize: '13px',
@@ -454,23 +457,19 @@ const CustomNode = ({ data }: {
 
       <div
         style={{
-          background: `linear-gradient(145deg, ${colors.bg} 0%, ${colors.bg}dd 100%)`,
-          border: data.isHighlighted ? `3px solid #ffffff` : `2px solid ${colors.border}`,
-          borderRadius: '12px',
-          padding: '14px 18px',
+          background: colors.bg,
+          border: data.isHighlighted ? `2px solid #ffffff` : `1px solid ${colors.border}`,
+          borderRadius: '8px',
+          padding: '12px 16px',
           color: colors.text,
           fontSize: `${13 * nodeScale}px`,
           fontWeight: 600,
           minWidth: `${180 * nodeScale}px`,
           maxWidth: `${260 * nodeScale}px`,
           textAlign: 'center',
-          boxShadow: data.isHighlighted 
-            ? '0 0 0 3px rgba(255,255,255,0.3), 0 8px 24px rgba(0,0,0,0.4)'
-            : '0 4px 12px rgba(0,0,0,0.3), 0 2px 4px rgba(0,0,0,0.2)',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'all 0.2s ease',
           cursor: 'pointer',
           position: 'relative' as const,
-          transform: data.isHighlighted ? 'scale(1.02)' : 'scale(1)',
         }}
       >
         {/* Header with icon and type */}
@@ -545,12 +544,8 @@ const CustomNode = ({ data }: {
               transition: 'all 0.2s ease',
               cursor: 'pointer',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
+            onMouseEnter={() => {}}
+            onMouseLeave={() => {}}
           >
             <span style={{ fontSize: '14px', fontWeight: 800 }}>
               {data.isExpanded ? '−' : '+'}
@@ -566,18 +561,17 @@ const CustomNode = ({ data }: {
           <div
             style={{
               position: 'absolute',
-              top: '-10px',
-              right: '-10px',
-              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+              top: '-8px',
+              right: '-8px',
+              background: '#6366f1',
               color: '#fff',
-              borderRadius: '12px',
-              padding: '3px 8px',
-              fontSize: '11px',
-              fontWeight: 700,
-              minWidth: '20px',
+              borderRadius: '10px',
+              padding: '2px 6px',
+              fontSize: '10px',
+              fontWeight: 600,
+              minWidth: '18px',
               textAlign: 'center',
-              boxShadow: '0 2px 10px rgba(99, 102, 241, 0.5)',
-              border: '2px solid #0f172a',
+              border: '1px solid #0f172a',
             }}
           >
             {data.childCount}
@@ -589,18 +583,17 @@ const CustomNode = ({ data }: {
           <div
             style={{
               position: 'absolute',
-              top: '-10px',
-              left: '-10px',
-              background: 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
-              color: '#fff',
-              borderRadius: '6px',
-              padding: '2px 6px',
-              fontSize: '9px',
-              fontWeight: 700,
+              top: '-8px',
+              left: '-8px',
+              background: '#f59e0b',
+              color: '#1a1a2e',
+              borderRadius: '4px',
+              padding: '1px 5px',
+              fontSize: '8px',
+              fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              boxShadow: '0 2px 8px rgba(245, 158, 11, 0.5)',
-              border: '2px solid #0f172a',
+              border: '1px solid #0f172a',
             }}
           >
             ROOT
@@ -2465,23 +2458,34 @@ const App = () => {
     return pathNodes;
   }, []);
 
-  // Helper function to check if an edge is in the highlighted path
+  // Helper function to get all edges leading TO a node (from its origins/parents)
   const getHighlightedEdges = useCallback((nodeId: string | null, data: GraphData): Set<string> => {
     if (!nodeId) return new Set();
     
     const pathEdges = new Set<string>();
-    let currentId: string | undefined = nodeId;
+    const visited = new Set<string>();
+    const queue: string[] = [nodeId];
     
-    // Traverse up to root and collect edges
-    while (currentId) {
-      const node = data.nodes.find(n => n.id === currentId);
-      if (!node || !node.parentId) break;
+    // BFS to find all edges leading to the selected node (tracing back to origins)
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
       
-      // Add edge key in format that matches our edge id pattern
-      pathEdges.add(`${node.parentId}-${currentId}`);
-      currentId = node.parentId;
+      // Find all edges where this node is the TARGET (i.e., edges coming INTO this node)
+      for (const edge of data.edges) {
+        if (edge.target === currentId) {
+          const edgeKey = `${edge.source}-${edge.target}`;
+          pathEdges.add(edgeKey);
+          // Add the source to queue to continue tracing back
+          if (!visited.has(edge.source)) {
+            queue.push(edge.source);
+          }
+        }
+      }
     }
     
+    console.log('Highlighted edges for node:', nodeId, Array.from(pathEdges));
     return pathEdges;
   }, []);
 
@@ -2535,11 +2539,17 @@ const App = () => {
   ): Edge[] => {
     const highlightedEdges = highlightedNodeId ? getHighlightedEdges(highlightedNodeId, data) : new Set<string>();
     
+    console.log('Building edges. HighlightedNodeId:', highlightedNodeId, 'Highlighted edges:', Array.from(highlightedEdges));
+    
     return data.edges
       .filter(edge => visibleIds.has(edge.source) && visibleIds.has(edge.target))
       .map((edge, index) => {
         const edgeKey = `${edge.source}-${edge.target}`;
         const isHighlighted = highlightedEdges.has(edgeKey);
+        
+        if (isHighlighted) {
+          console.log('Edge is HIGHLIGHTED:', edgeKey);
+        }
         
         return {
           id: `e-${edge.source}-${edge.target}-${index}`,
@@ -2547,33 +2557,33 @@ const App = () => {
           target: edge.target,
           type: 'smoothstep',
           label: edge.label,
-          animated: isHighlighted,
+          labelShowBg: true,
+          animated: false, // We use CSS animation instead
           className: isHighlighted ? 'highlighted' : '',
+          zIndex: isHighlighted ? 1000 : 0,
           style: {
-            stroke: isHighlighted ? '#3b82f6' : 'url(#edge-gradient)',
-            strokeWidth: isHighlighted ? 3 : 2,
+            stroke: isHighlighted ? '#38bdf8' : '#9ca3af',
+            strokeWidth: isHighlighted ? 4 : 1.5,
             strokeLinecap: 'round' as const,
-            strokeDasharray: isHighlighted ? '8 4' : 'none',
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: isHighlighted ? '#3b82f6' : '#6b7280',
-            width: isHighlighted ? 18 : 16,
-            height: isHighlighted ? 18 : 16,
+            color: isHighlighted ? '#38bdf8' : '#9ca3af',
+            width: isHighlighted ? 18 : 12,
+            height: isHighlighted ? 18 : 12,
           },
           labelStyle: {
-            fill: '#e2e8f0',
-            fontSize: 11,
-            fontWeight: 600,
-            background: '#1e293b',
+            fill: '#374151',
+            fontSize: 10,
+            fontWeight: 500,
           },
           labelBgStyle: {
-            fill: 'rgba(30, 41, 59, 0.95)',
+            fill: '#ffffff',
             fillOpacity: 0.95,
-            rx: 4,
-            ry: 4,
+            rx: 3,
+            ry: 3,
           },
-          labelBgPadding: [6, 4] as [number, number],
+          labelBgPadding: [4, 2] as [number, number],
         };
       });
   }, [getHighlightedEdges]);
@@ -2608,9 +2618,15 @@ const App = () => {
   useEffect(() => {
     if (!graphData || visibleNodeIds.size === 0) return;
 
+    console.log('=== selectedNodeId changed to:', selectedNodeId, '===');
+    
     // Rebuild nodes and edges with highlighting, preserving positions
     const flowNodes = buildFlowNodes(graphData, visibleNodeIds, expandedNodes, childrenMap, nodeDepthMap, rootNodeIds, selectedNodeId);
     const flowEdges = buildFlowEdges(graphData, visibleNodeIds, selectedNodeId);
+
+    console.log('Built', flowEdges.length, 'edges. Checking for highlighted class...');
+    const highlightedCount = flowEdges.filter(e => e.className === 'highlighted').length;
+    console.log('Edges with highlighted class:', highlightedCount);
 
     // Only update data properties without changing positions
     setNodes(currentNodes => 
@@ -2832,6 +2848,7 @@ const App = () => {
       return; // Don't highlight if expand was clicked
     }
 
+    console.log('Node clicked! Setting selectedNodeId to:', node.id);
     // Single click: Only set selected node for path highlighting
     setSelectedNodeId(node.id);
   }, []);
@@ -3019,23 +3036,26 @@ const App = () => {
         </defs>
       </svg>
 
-      {/* CSS for animated dashed edges */}
+      {/* CSS for animated dashed edges - moving towards child */}
       <style>{`
-        @keyframes dashMove {
-          0% { stroke-dashoffset: 20; }
-          100% { stroke-dashoffset: 0; }
+        @keyframes dashMoveToChild {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -20; }
         }
-        .react-flow__edge-path.highlighted {
-          stroke: #3b82f6 !important;
-          stroke-width: 3px !important;
-          stroke-dasharray: 8 4 !important;
-          animation: dashMove 0.5s linear infinite !important;
+        .react-flow__edge.highlighted {
+          z-index: 1000 !important;
         }
         .react-flow__edge.highlighted .react-flow__edge-path {
-          stroke: #3b82f6 !important;
-          stroke-width: 3px !important;
-          stroke-dasharray: 8 4 !important;
-          animation: dashMove 0.5s linear infinite !important;
+          stroke: #38bdf8 !important;
+          stroke-width: 4px !important;
+          stroke-dasharray: 10 5 !important;
+          animation: dashMoveToChild 0.3s linear infinite !important;
+        }
+        .react-flow__edge-path.highlighted {
+          stroke: #38bdf8 !important;
+          stroke-width: 4px !important;
+          stroke-dasharray: 10 5 !important;
+          animation: dashMoveToChild 0.3s linear infinite !important;
         }
       `}</style>
 
@@ -3065,7 +3085,7 @@ const App = () => {
           variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
-          color="rgba(100, 116, 139, 0.4)"
+          color="rgba(100, 116, 139, 0.3)"
         />
         {/* Secondary grid layer for cross pattern */}
         <Background
@@ -3073,25 +3093,23 @@ const App = () => {
           variant={BackgroundVariant.Dots}
           gap={100}
           size={2}
-          color="rgba(100, 116, 139, 0.25)"
+          color="rgba(100, 116, 139, 0.2)"
         />
         <Controls
           style={{
-            background: 'rgba(30, 41, 59, 0.95)',
-            border: '1px solid rgba(100, 255, 218, 0.3)',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
           }}
         />
         <MiniMap
           style={{
-            background: 'rgba(30, 41, 59, 0.95)',
-            border: '1px solid rgba(100, 255, 218, 0.3)',
-            borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
           }}
           nodeColor={(node) => nodeColors[node.data?.type]?.bg || '#3b82f6'}
-          maskColor="rgba(15, 23, 42, 0.8)"
+          maskColor="rgba(241, 245, 249, 0.8)"
         />
 
         {/* Stats Panel - Collapsible */}
@@ -3391,36 +3409,35 @@ const App = () => {
           right: 0,
           bottom: 0,
           width: '480px',
-          background: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
-          borderLeft: '1px solid rgba(100, 255, 218, 0.15)',
+          background: '#0f172a',
+          borderLeft: '1px solid rgba(100, 116, 139, 0.3)',
           zIndex: 2000,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '-20px 0 60px rgba(0, 0, 0, 0.6)',
           animation: 'slideInRight 0.3s ease',
+          overflow: 'hidden',
         }}>
           {/* Header - Glassmorphism style */}
           <div style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid rgba(100, 255, 218, 0.1)',
+            padding: '16px 20px',
+            borderBottom: '1px solid rgba(100, 116, 139, 0.3)',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: 'linear-gradient(180deg, rgba(100, 255, 218, 0.08) 0%, rgba(100, 255, 218, 0.02) 100%)',
-            backdropFilter: 'blur(10px)',
+            background: 'rgba(30, 41, 59, 0.5)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '14px',
-                background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(100, 116, 139, 0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid rgba(100, 255, 218, 0.2)',
+                border: '1px solid rgba(100, 116, 139, 0.3)',
               }}>
-                <span style={{ fontSize: '22px' }}>🧠</span>
+                <span style={{ fontSize: '20px' }}>🧠</span>
               </div>
               <div>
                 <h2 style={{ margin: 0, color: '#f1f5f9', fontSize: '17px', fontWeight: 600 }}>
@@ -3463,7 +3480,7 @@ const App = () => {
           </div>
 
           {/* Conversation Area */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '20px' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px', overflowX: 'hidden' }}>
             {/* Welcome State */}
             {!qaAnswer && !qaLoading && (
               <div style={{
@@ -3476,17 +3493,17 @@ const App = () => {
                 padding: '20px',
               }}>
                 <div style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '24px',
-                  background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.15) 0%, rgba(56, 189, 248, 0.15) 100%)',
+                  width: '70px',
+                  height: '70px',
+                  borderRadius: '20px',
+                  background: 'rgba(100, 116, 139, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: '20px',
-                  border: '1px solid rgba(100, 255, 218, 0.2)',
+                  marginBottom: '16px',
+                  border: '1px solid rgba(100, 116, 139, 0.3)',
                 }}>
-                  <span style={{ fontSize: '40px' }}>💬</span>
+                  <span style={{ fontSize: '36px' }}>💬</span>
                 </div>
                 <h3 style={{ color: '#f1f5f9', margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600 }}>
                   Ask About Your Code
@@ -3606,12 +3623,13 @@ const App = () => {
                   <div style={{
                     maxWidth: '85%',
                     padding: '12px 16px',
-                    borderRadius: '16px 16px 4px 16px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                    borderRadius: '12px 12px 4px 12px',
+                    background: '#3b82f6',
                     color: '#ffffff',
                     fontSize: '13px',
                     lineHeight: '1.5',
-                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
                   }}>
                     {qaQuestion || qaHistory[qaHistory.length - 1]?.question || 'Your question'}
                   </div>
@@ -3624,30 +3642,33 @@ const App = () => {
                   marginBottom: '16px',
                 }}>
                   <div style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, rgba(100, 255, 218, 0.2) 0%, rgba(56, 189, 248, 0.2) 100%)',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: 'rgba(100, 116, 139, 0.2)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
-                    border: '1px solid rgba(100, 255, 218, 0.2)',
+                    border: '1px solid rgba(100, 116, 139, 0.3)',
                   }}>
-                    <span style={{ fontSize: '18px' }}>🧠</span>
+                    <span style={{ fontSize: '16px' }}>🧠</span>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Answer Content */}
                     <div
                       className="markdown-content"
                       style={{
                         background: 'rgba(30, 41, 59, 0.6)',
-                        padding: '16px 18px',
-                        borderRadius: '4px 16px 16px 16px',
-                        border: '1px solid rgba(100, 255, 218, 0.1)',
+                        padding: '14px 16px',
+                        borderRadius: '4px 12px 12px 12px',
+                        border: '1px solid rgba(100, 116, 139, 0.3)',
                         fontSize: '13px',
-                        lineHeight: '1.7',
+                        lineHeight: '1.6',
                         color: '#e2e8f0',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        overflowX: 'hidden',
                       }}
                       dangerouslySetInnerHTML={{ __html: marked(qaAnswer.answer) as string }}
                     />
@@ -4112,19 +4133,18 @@ const App = () => {
           z-index: 100 !important;
         }
         .react-flow__node:hover > div {
-          transform: scale(1.05);
-          box-shadow: 0 8px 30px rgba(100, 255, 218, 0.3) !important;
+          /* No glow or scale on hover - minimal design */
         }
         .react-flow__controls-button {
-          background: rgba(30, 41, 59, 0.95) !important;
-          border: 1px solid rgba(100, 255, 218, 0.2) !important;
-          color: #64ffda !important;
+          background: #ffffff !important;
+          border: 1px solid #e2e8f0 !important;
+          color: #475569 !important;
         }
         .react-flow__controls-button:hover {
-          background: rgba(100, 255, 218, 0.1) !important;
+          background: #f1f5f9 !important;
         }
         .react-flow__controls-button svg {
-          fill: #64ffda !important;
+          fill: #475569 !important;
         }
       `}</style>
     </div>
