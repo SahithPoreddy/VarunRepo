@@ -3746,8 +3746,26 @@ const App = () => {
                             </span>
                           </div>
                           {node.filePath && (
-                            <div style={{ color: '#64748b', fontSize: '11px', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <span>📁</span> {node.filePath}
+                            <div style={{ 
+                              color: '#64748b', 
+                              fontSize: '11px', 
+                              marginTop: '6px', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: '4px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '100%',
+                            }}>
+                              <span style={{ flexShrink: 0 }}>📁</span>
+                              <span style={{ 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {node.filePath}
+                              </span>
                             </div>
                           )}
                           {node.score > 0 && (
