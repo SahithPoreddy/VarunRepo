@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { AnalysisResult, Persona, CodeNode, ClineContext } from '../types/types';
-import { ClineAdapter } from '../cline/adapter';
+import { AnalysisResult, Persona, CodeNode, AgentContext } from '../types/types';
+import { AgentAdapter } from '../agent/adapter';
 import { DocumentationGenerator } from '../documentation/generator';
 import { GraphBuilder } from '../graph/graphBuilder';
 import * as path from 'path';
@@ -8,16 +8,16 @@ import * as path from 'path';
 export class VisualizationPanel {
   private panel: vscode.WebviewPanel | undefined;
   private context: vscode.ExtensionContext;
-  private clineAdapter: ClineAdapter;
+  private agentAdapter: AgentAdapter;
   private docGenerator: DocumentationGenerator;
   private graphBuilder: GraphBuilder;
   private currentPersona: Persona = 'developer';
   private currentAnalysis: AnalysisResult | undefined;
   private disposables: vscode.Disposable[] = [];
 
-  constructor(context: vscode.ExtensionContext, clineAdapter: ClineAdapter) {
+  constructor(context: vscode.ExtensionContext, agentAdapter: AgentAdapter) {
     this.context = context;
-    this.clineAdapter = clineAdapter;
+    this.agentAdapter = agentAdapter;
     this.docGenerator = new DocumentationGenerator();
     this.graphBuilder = new GraphBuilder();
     this.createPanel();
@@ -57,8 +57,8 @@ export class VisualizationPanel {
         await this.handleNodeClick(message.nodeId);
         break;
       
-      case 'sendToCline':
-        await this.handleSendToCline(message.nodeId, message.query);
+      case 'sendToAgent':
+        await this.handleSendToAgent(message.nodeId, message.query);
         break;
       
       case 'changePersona':
@@ -98,17 +98,17 @@ export class VisualizationPanel {
     });
   }
 
-  private async handleSendToCline(nodeId: string, query: string) {
+  private async handleSendToAgent(nodeId: string, query: string) {
     if (!this.currentAnalysis) return;
 
     const node = this.currentAnalysis.graph.nodes.find(n => n.id === nodeId);
     if (!node) return;
 
-    // Build context for Cline
+    // Build context for Agent
     const dependencies = this.graphBuilder.getDependencies(this.currentAnalysis.graph, nodeId);
     const dependents = this.graphBuilder.getDependents(this.currentAnalysis.graph, nodeId);
 
-    const context: ClineContext = {
+    const context: AgentContext = {
       nodeId: node.id,
       nodeName: node.label,
       nodeType: node.type,
@@ -121,17 +121,17 @@ export class VisualizationPanel {
       query: query
     };
 
-    // Send to Cline
-    const response = await this.clineAdapter.sendModificationRequest(context);
+    // Send to Agent
+    const response = await this.agentAdapter.sendModificationRequest(context);
 
     // Show result
     if (response.success) {
       vscode.window.showInformationMessage(
-        response.explanation || 'Request sent to Cline successfully'
+        response.explanation || 'Request sent to Agent successfully'
       );
     } else {
       vscode.window.showErrorMessage(
-        response.error || 'Failed to send request to Cline'
+        response.error || 'Failed to send request to Agent'
       );
     }
   }
@@ -552,7 +552,7 @@ export class VisualizationPanel {
         const query = document.getElementById('query-input').value;
         if (query.trim()) {
           vscode.postMessage({
-            command: 'sendToCline',
+            command: 'sendToAgent',
             nodeId: currentNodeId,
             query: query
           });

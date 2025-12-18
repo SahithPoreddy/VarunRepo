@@ -212,7 +212,7 @@ export class EntryPointDetector {
       }
     }
 
-    // Find Python files with if __name__ == '__main__'
+    // Find Python files with if __name__ == '__main__' or framework app creation
     const pythonFiles = await vscode.workspace.findFiles(
       '**/*.py',
       '{**/node_modules/**,**/__pycache__/**,**/venv/**,**/.venv/**,**/env/**}',
@@ -221,11 +221,13 @@ export class EntryPointDetector {
 
     for (const file of pythonFiles) {
       const hasMain = await this.hasPythonMainBlock(file);
-      if (hasMain) {
+      const frameworkScore = await this.getPythonFrameworkScore(file);
+      
+      if (hasMain || frameworkScore > 0) {
         entryPoints.push({
           filePath: file.fsPath,
           type: 'main',
-          score: 8
+          score: Math.max(hasMain ? 8 : 0, frameworkScore)
         });
       }
     }
@@ -243,6 +245,49 @@ export class EntryPointDetector {
       return mainBlockPattern.test(content);
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Get score for Python framework entry points (FastAPI, Flask, Django)
+   */
+  private async getPythonFrameworkScore(fileUri: vscode.Uri): Promise<number> {
+    try {
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      const content = document.getText();
+      
+      // FastAPI app creation: app = FastAPI()
+      if (/^\s*app\s*=\s*FastAPI\s*\(/m.test(content)) {
+        console.log(`FastAPI entry point detected: ${fileUri.fsPath}`);
+        return 12;
+      }
+      
+      // Flask app creation: app = Flask(__name__)
+      if (/^\s*app\s*=\s*Flask\s*\(/m.test(content)) {
+        console.log(`Flask entry point detected: ${fileUri.fsPath}`);
+        return 12;
+      }
+      
+      // Django ASGI/WSGI: application = get_asgi_application() or get_wsgi_application()
+      if (/application\s*=\s*get_(asgi|wsgi)_application\s*\(/m.test(content)) {
+        console.log(`Django WSGI/ASGI entry point detected: ${fileUri.fsPath}`);
+        return 11;
+      }
+      
+      // Django manage.py: execute_from_command_line
+      if (/execute_from_command_line\s*\(/m.test(content)) {
+        console.log(`Django manage.py entry point detected: ${fileUri.fsPath}`);
+        return 10;
+      }
+      
+      // Uvicorn/Gunicorn runner
+      if (/uvicorn\.run\s*\(/m.test(content) || /gunicorn/m.test(content)) {
+        return 9;
+      }
+      
+      return 0;
+    } catch (error) {
+      return 0;
     }
   }
 

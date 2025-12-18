@@ -25,119 +25,175 @@ interface ParsedElement {
   isPrivate?: boolean;
   isProtected?: boolean;
   docstring?: string;
-  layer?: string; // Framework layer (e.g., Django, FastAPI, Flask)
+  layer?: string;
   children: ParsedElement[];
 }
 
 /**
- * Enhanced Python AST Parser with Tree-Sitter-like hierarchical parsing
+ * Enhanced Python AST Parser with comprehensive framework support
  * 
  * Key Features:
- * 1. Complete parent-child relationship tracking using indentation-based parsing
- * 2. Django/Flask/FastAPI layer detection (Views, Models, Serializers, etc.)
- * 3. Nested class support
- * 4. Inner function/method detection
- * 5. Property and classmethod/staticmethod detection
- * 6. Docstring extraction
- * 7. Type hints support
- * 8. Decorator parsing with arguments
- * 9. Multiple inheritance detection
- * 10. Private/protected method detection (_ and __ prefix)
+ * 1. Entry point detection (main.py, app.py, manage.py, __main__, if __name__ == "__main__")
+ * 2. Complete parent-child relationship tracking using indentation-based parsing
+ * 3. Multi-framework support:
+ *    - FastAPI: app → routers → endpoints → dependencies → models
+ *    - Django: project → apps → views → models → serializers
+ *    - Flask: app → blueprints → routes → models
+ * 4. Nested class/function support
+ * 5. Decorator parsing with arguments
+ * 6. Type hints and return type extraction
+ * 7. Docstring extraction
+ * 8. Proper hierarchy building for visualization
  */
 export class PythonAstParser {
   private fileUri: vscode.Uri | null = null;
   private filePath: string = '';
   private content: string = '';
   private lines: string[] = [];
+  private detectedFramework: 'fastapi' | 'django' | 'flask' | 'generic' = 'generic';
+  private hasMainBlock: boolean = false;
+  private isEntryPointFile: boolean = false;
 
-  // Python framework layer detection
-  private static readonly FRAMEWORK_PATTERNS: Record<string, { decorators: string[]; bases: string[]; layer: string }> = {
-    // Django
-    django_view: {
-      decorators: ['api_view', 'permission_classes', 'authentication_classes'],
-      bases: ['View', 'TemplateView', 'ListView', 'DetailView', 'CreateView', 'UpdateView', 'DeleteView', 'FormView', 'RedirectView'],
-      layer: 'view'
-    },
-    django_viewset: {
-      decorators: ['action'],
-      bases: ['ViewSet', 'ModelViewSet', 'GenericViewSet', 'ReadOnlyModelViewSet'],
-      layer: 'viewset'
-    },
-    django_model: {
+  // Framework detection patterns
+  private static readonly FRAMEWORK_IMPORTS: Record<string, string[]> = {
+    fastapi: ['fastapi', 'FastAPI', 'APIRouter', 'Depends', 'HTTPException'],
+    django: ['django', 'rest_framework', 'DjangoFilterBackend', 'ModelViewSet'],
+    flask: ['flask', 'Flask', 'Blueprint', 'render_template', 'request']
+  };
+
+  // Entry point file patterns
+  private static readonly ENTRY_POINT_FILES = [
+    'main.py', 'app.py', 'application.py', 'run.py', 'server.py',
+    'manage.py', 'wsgi.py', 'asgi.py', '__main__.py', 'cli.py'
+  ];
+
+  // Layer detection for each framework
+  private static readonly FASTAPI_LAYERS: Record<string, { decorators: RegExp[]; patterns: RegExp[]; layer: string; priority: number }> = {
+    app: {
       decorators: [],
-      bases: ['Model', 'models.Model', 'AbstractUser', 'AbstractBaseUser'],
-      layer: 'model'
+      patterns: [/FastAPI\s*\(/],
+      layer: 'app',
+      priority: 1
     },
-    django_serializer: {
+    router: {
+      decorators: [],
+      patterns: [/APIRouter\s*\(/, /router\s*=\s*APIRouter/],
+      layer: 'router',
+      priority: 2
+    },
+    endpoint: {
+      decorators: [/@app\.(get|post|put|delete|patch|options|head)/, /@router\.(get|post|put|delete|patch|options|head)/, /@\w+\.(get|post|put|delete|patch|options|head)/],
+      patterns: [],
+      layer: 'endpoint',
+      priority: 3
+    },
+    dependency: {
+      decorators: [/Depends\s*\(/],
+      patterns: [/def\s+get_\w+/, /async\s+def\s+get_\w+/],
+      layer: 'dependency',
+      priority: 4
+    },
+    schema: {
+      decorators: [],
+      patterns: [/class\s+\w+\s*\(\s*BaseModel\s*\)/, /class\s+\w+\s*\(\s*BaseSettings\s*\)/],
+      layer: 'schema',
+      priority: 5
+    },
+    model: {
+      decorators: [],
+      patterns: [/class\s+\w+\s*\(\s*Base\s*\)/, /class\s+\w+\s*\(\s*DeclarativeBase\s*\)/],
+      layer: 'model',
+      priority: 6
+    }
+  };
+
+  private static readonly DJANGO_LAYERS: Record<string, { decorators: RegExp[]; bases: string[]; layer: string; priority: number }> = {
+    view: {
+      decorators: [/@api_view/, /@permission_classes/, /@action/],
+      bases: ['View', 'TemplateView', 'ListView', 'DetailView', 'CreateView', 'UpdateView', 'DeleteView', 'FormView', 'APIView'],
+      layer: 'view',
+      priority: 1
+    },
+    viewset: {
+      decorators: [],
+      bases: ['ViewSet', 'ModelViewSet', 'GenericViewSet', 'ReadOnlyModelViewSet'],
+      layer: 'viewset',
+      priority: 1
+    },
+    serializer: {
       decorators: [],
       bases: ['Serializer', 'ModelSerializer', 'HyperlinkedModelSerializer'],
-      layer: 'serializer'
+      layer: 'serializer',
+      priority: 2
     },
-    django_form: {
+    model: {
       decorators: [],
-      bases: ['Form', 'ModelForm', 'forms.Form', 'forms.ModelForm'],
-      layer: 'form'
+      bases: ['Model', 'models.Model', 'AbstractUser', 'AbstractBaseUser'],
+      layer: 'model',
+      priority: 3
     },
-    django_admin: {
-      decorators: ['admin.register', 'register'],
-      bases: ['ModelAdmin', 'admin.ModelAdmin', 'TabularInline', 'StackedInline'],
-      layer: 'admin'
+    form: {
+      decorators: [],
+      bases: ['Form', 'ModelForm', 'forms.Form'],
+      layer: 'form',
+      priority: 4
     },
-    django_middleware: {
+    admin: {
+      decorators: [/@admin\.register/, /@register/],
+      bases: ['ModelAdmin', 'admin.ModelAdmin'],
+      layer: 'admin',
+      priority: 5
+    },
+    middleware: {
       decorators: [],
       bases: ['MiddlewareMixin'],
-      layer: 'middleware'
+      layer: 'middleware',
+      priority: 6
     },
-    django_command: {
+    command: {
       decorators: [],
       bases: ['BaseCommand'],
-      layer: 'command'
+      layer: 'command',
+      priority: 7
     },
-    // FastAPI
-    fastapi_router: {
-      decorators: ['router.get', 'router.post', 'router.put', 'router.delete', 'router.patch', 'app.get', 'app.post', 'app.put', 'app.delete'],
-      bases: [],
-      layer: 'endpoint'
-    },
-    fastapi_depends: {
-      decorators: ['Depends'],
-      bases: [],
-      layer: 'dependency'
-    },
-    // Flask
-    flask_route: {
-      decorators: ['route', 'app.route', 'blueprint.route', 'bp.route'],
-      bases: [],
-      layer: 'route'
-    },
-    flask_view: {
-      decorators: [],
-      bases: ['MethodView', 'View'],
-      layer: 'view'
-    },
-    // SQLAlchemy
-    sqlalchemy_model: {
-      decorators: [],
-      bases: ['Base', 'DeclarativeBase', 'db.Model'],
-      layer: 'model'
-    },
-    // Pydantic
-    pydantic_model: {
-      decorators: ['validator', 'root_validator'],
-      bases: ['BaseModel', 'BaseSettings'],
-      layer: 'schema'
-    },
-    // Celery
-    celery_task: {
-      decorators: ['task', 'shared_task', 'app.task', 'celery.task'],
-      bases: ['Task'],
-      layer: 'task'
-    },
-    // Testing
     test: {
-      decorators: ['pytest.fixture', 'fixture', 'pytest.mark', 'mock.patch', 'patch'],
-      bases: ['TestCase', 'unittest.TestCase', 'APITestCase', 'TransactionTestCase'],
-      layer: 'test'
+      decorators: [/@pytest\.fixture/, /@pytest\.mark/],
+      bases: ['TestCase', 'APITestCase', 'TransactionTestCase'],
+      layer: 'test',
+      priority: 8
+    }
+  };
+
+  private static readonly FLASK_LAYERS: Record<string, { decorators: RegExp[]; patterns: RegExp[]; layer: string; priority: number }> = {
+    app: {
+      decorators: [],
+      patterns: [/Flask\s*\(/, /app\s*=\s*Flask/],
+      layer: 'app',
+      priority: 1
+    },
+    blueprint: {
+      decorators: [],
+      patterns: [/Blueprint\s*\(/, /bp\s*=\s*Blueprint/],
+      layer: 'blueprint',
+      priority: 2
+    },
+    route: {
+      decorators: [/@app\.route/, /@\w+\.route/, /@bp\.route/, /@blueprint\.route/],
+      patterns: [],
+      layer: 'route',
+      priority: 3
+    },
+    view: {
+      decorators: [],
+      patterns: [/class\s+\w+\s*\(\s*MethodView\s*\)/],
+      layer: 'view',
+      priority: 3
+    },
+    model: {
+      decorators: [],
+      patterns: [/class\s+\w+\s*\(\s*db\.Model\s*\)/],
+      layer: 'model',
+      priority: 4
     }
   };
 
@@ -147,33 +203,32 @@ export class PythonAstParser {
     this.lines = this.content.split('\n');
     this.fileUri = fileUri;
     this.filePath = fileUri.fsPath;
+    this.isEntryPointFile = isEntryPoint;
+
+    // Detect framework and entry point
+    this.detectFramework();
+    this.detectEntryPoint();
 
     const nodes: CodeNode[] = [];
     const edges: CodeEdge[] = [];
 
     try {
-      // Parse all elements with proper hierarchy using tree structure
+      // Parse all elements with proper hierarchy
       const rootElements = this.parseElementsTree();
 
       // Flatten tree while maintaining parent-child relationships
       const allElements = this.flattenElements(rootElements);
 
-      // Create module node for the file (so root elements have an edge)
+      // Create module node for the file
       const fileName = fileUri.fsPath.split(/[\\/]/).pop() || 'module';
       const baseName = fileName.replace(/\.py$/, '');
-      const moduleNode = this.createModuleNode(baseName);
+      const moduleNode = this.createModuleNode(baseName, allElements);
       nodes.push(moduleNode);
 
       // Build nodes and edges
-      const classMap = new Map<string, string>();
-
       for (const element of allElements) {
         const node = this.createNode(element);
         nodes.push(node);
-
-        if (element.type === 'class') {
-          classMap.set(element.name, node.id);
-        }
 
         // Add containment edge for children
         if (element.parentId) {
@@ -192,20 +247,61 @@ export class PythonAstParser {
             label: 'contains'
           });
         }
-
-        // Note: We skip inheritance edges here to keep the graph clean
-        // Only 'contains' edges are created for parent-child relationships
       }
-
-      // Note: We removed extractImports and extractFrameworkDependencies
-      // to keep the graph showing only parent-child (contains) relationships
-      // Import relationships make the graph too complex
 
       return { nodes, edges };
     } catch (error) {
       console.error(`Failed to parse Python file ${fileUri.fsPath}:`, error);
       return { nodes: [], edges: [] };
     }
+  }
+
+  /**
+   * Detect the Python framework being used
+   */
+  private detectFramework(): void {
+    // Check imports
+    for (const [framework, imports] of Object.entries(PythonAstParser.FRAMEWORK_IMPORTS)) {
+      for (const imp of imports) {
+        if (this.content.includes(imp)) {
+          this.detectedFramework = framework as 'fastapi' | 'django' | 'flask';
+          console.log(`Detected Python framework: ${framework}`);
+          return;
+        }
+      }
+    }
+
+    this.detectedFramework = 'generic';
+  }
+
+  /**
+   * Detect if this file is an entry point
+   */
+  private detectEntryPoint(): void {
+    const fileName = this.filePath.split(/[\\/]/).pop() || '';
+    
+    // Check file name patterns
+    if (PythonAstParser.ENTRY_POINT_FILES.includes(fileName.toLowerCase())) {
+      this.isEntryPointFile = true;
+    }
+
+    // Check for if __name__ == "__main__":
+    if (this.content.includes('if __name__') && this.content.includes('__main__')) {
+      this.hasMainBlock = true;
+      this.isEntryPointFile = true;
+    }
+
+    // Check for FastAPI/Flask app creation at module level
+    if (this.content.match(/^app\s*=\s*(FastAPI|Flask)\s*\(/m)) {
+      this.isEntryPointFile = true;
+    }
+
+    // Check for Django manage.py pattern
+    if (this.content.includes('django') && this.content.includes('execute_from_command_line')) {
+      this.isEntryPointFile = true;
+    }
+
+    console.log(`Python entry point detection: file=${fileName}, isEntry=${this.isEntryPointFile}, hasMain=${this.hasMainBlock}`);
   }
 
   /**
@@ -223,13 +319,13 @@ export class PythonAstParser {
       const trimmed = line.trimStart();
       const indent = line.length - trimmed.length;
 
-      // Skip empty lines and comments (but preserve decorators)
+      // Skip empty lines and comments
       if (trimmed === '' || trimmed.startsWith('#')) {
         i++;
         continue;
       }
 
-      // Pop stack elements that are no longer in scope based on indentation
+      // Pop stack elements that are no longer in scope
       while (elementStack.length > 0 && indent <= elementStack[elementStack.length - 1].indent) {
         elementStack.pop();
       }
@@ -238,7 +334,7 @@ export class PythonAstParser {
       if (trimmed.startsWith('@')) {
         const decoratorMatch = trimmed.match(/^@([\w.]+(?:\([^)]*\))?)/);
         if (decoratorMatch) {
-          currentDecorators.push(decoratorMatch[1]);
+          currentDecorators.push(decoratorMatch[0]); // Keep full decorator with @
         }
         i++;
         continue;
@@ -249,7 +345,6 @@ export class PythonAstParser {
       if (classMatch) {
         const element = this.parseClassDeclaration(classMatch, i, indent, currentDecorators, elementStack);
         
-        // Add to parent's children or root
         if (elementStack.length > 0) {
           const parent = elementStack[elementStack.length - 1];
           element.parentId = parent.id;
@@ -264,12 +359,11 @@ export class PythonAstParser {
         continue;
       }
 
-      // Parse function/method definition
-      const funcMatch = trimmed.match(/^(async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)(?:\s*->\s*(.+?))?\s*:/);
+      // Parse function/method definition (handle multiline parameters)
+      const funcMatch = this.matchFunctionDefinition(i);
       if (funcMatch) {
-        const element = this.parseFunctionDeclaration(funcMatch, i, indent, currentDecorators, elementStack);
+        const element = this.parseFunctionDeclaration(funcMatch.match, funcMatch.startLine, indent, currentDecorators, elementStack);
         
-        // Add to parent's children or root
         if (elementStack.length > 0) {
           const parent = elementStack[elementStack.length - 1];
           element.parentId = parent.id;
@@ -280,7 +374,7 @@ export class PythonAstParser {
 
         elementStack.push(element);
         currentDecorators = [];
-        i++;
+        i = funcMatch.endLine + 1;
         continue;
       }
 
@@ -296,6 +390,45 @@ export class PythonAstParser {
   }
 
   /**
+   * Match function definition, handling multiline parameters
+   */
+  private matchFunctionDefinition(startLine: number): { match: RegExpMatchArray; startLine: number; endLine: number } | null {
+    let combined = '';
+    let endLine = startLine;
+    let parenDepth = 0;
+    let foundDef = false;
+
+    for (let i = startLine; i < Math.min(startLine + 20, this.lines.length); i++) {
+      const line = this.lines[i];
+      combined += line + '\n';
+
+      for (const char of line) {
+        if (char === '(') parenDepth++;
+        if (char === ')') parenDepth--;
+      }
+
+      if (line.trimStart().startsWith('def ') || line.trimStart().startsWith('async def ')) {
+        foundDef = true;
+      }
+
+      if (foundDef && parenDepth === 0 && combined.includes(':')) {
+        endLine = i;
+        break;
+      }
+    }
+
+    if (!foundDef) return null;
+
+    // Match the full function signature
+    const funcMatch = combined.match(/^(\s*)(async\s+)?def\s+(\w+)\s*\(([\s\S]*?)\)(?:\s*->\s*([^\n:]+))?\s*:/);
+    if (funcMatch) {
+      return { match: funcMatch, startLine, endLine };
+    }
+
+    return null;
+  }
+
+  /**
    * Parse a class declaration
    */
   private parseClassDeclaration(
@@ -307,22 +440,17 @@ export class PythonAstParser {
   ): ParsedElement {
     const className = match[1];
     const basesStr = match[2] || '';
-    
-    // Parse base classes, handling generics and metaclass
     const bases = this.parseBaseClasses(basesStr);
     
     const endLine = this.findBlockEnd(lineIndex, indent);
     const parentId = stack.length > 0 ? stack[stack.length - 1].id : undefined;
     
-    // Create ID based on nesting
     const classId = parentId
       ? `${parentId}$${className}`
       : `${this.filePath}:class:${className}`;
 
-    // Detect framework layer
-    const layer = this.detectFrameworkLayer(decorators, bases);
-
-    // Extract docstring
+    // Detect layer based on framework
+    const layer = this.detectLayer(decorators, bases, className);
     const docstring = this.extractDocstring(lineIndex + 1, indent);
 
     return {
@@ -351,46 +479,35 @@ export class PythonAstParser {
     decorators: string[],
     stack: ParsedElement[]
   ): ParsedElement {
-    const isAsync = !!match[1];
-    const funcName = match[2];
-    const paramsStr = match[3];
-    const returnType = match[4]?.trim() || '';
+    const isAsync = !!match[2];
+    const funcName = match[3];
+    const paramsStr = match[4] || '';
+    const returnType = match[5]?.trim() || '';
 
     const parameters = this.parseParameters(paramsStr);
     const endLine = this.findBlockEnd(lineIndex, indent);
     const parentId = stack.length > 0 ? stack[stack.length - 1].id : undefined;
 
-    // Determine if it's a method or standalone function
     const isMethod = parentId && parentId.includes(':class:');
-    const isStatic = decorators.includes('staticmethod');
-    const isClassMethod = decorators.includes('classmethod');
+    const isStatic = decorators.some(d => d.includes('staticmethod'));
+    const isClassMethod = decorators.some(d => d.includes('classmethod'));
     const isProperty = decorators.some(d => 
-      d.startsWith('property') || 
-      d === 'cached_property' || 
-      d.endsWith('.setter') || 
-      d.endsWith('.getter') || 
-      d.endsWith('.deleter')
+      d.includes('property') || d.includes('.setter') || d.includes('.getter')
     );
     
-    // Detect private/protected
     const isPrivate = funcName.startsWith('__') && !funcName.endsWith('__');
     const isProtected = funcName.startsWith('_') && !funcName.startsWith('__');
 
-    // Create ID based on nesting and type
     let funcId: string;
     if (isMethod) {
       funcId = `${parentId}:method:${funcName}:${lineIndex + 1}`;
     } else if (parentId) {
-      // Nested function
       funcId = `${parentId}:function:${funcName}:${lineIndex + 1}`;
     } else {
       funcId = `${this.filePath}:function:${funcName}:${lineIndex + 1}`;
     }
 
-    // Detect framework layer from decorators
-    const layer = this.detectFrameworkLayer(decorators, []);
-
-    // Extract docstring
+    const layer = this.detectLayer(decorators, [], funcName);
     const docstring = this.extractDocstring(lineIndex + 1, indent);
 
     return {
@@ -417,7 +534,87 @@ export class PythonAstParser {
   }
 
   /**
-   * Parse base classes from string, handling generics and metaclass
+   * Detect layer based on framework and decorators/bases
+   */
+  private detectLayer(decorators: string[], bases: string[], name: string): string | undefined {
+    const decoratorStr = decorators.join(' ');
+    
+    if (this.detectedFramework === 'fastapi') {
+      for (const [key, config] of Object.entries(PythonAstParser.FASTAPI_LAYERS)) {
+        // Check decorators
+        for (const pattern of config.decorators) {
+          if (pattern.test(decoratorStr)) {
+            return config.layer;
+          }
+        }
+        // Check patterns in source context
+        const lineIdx = this.lines.findIndex(l => l.includes(name));
+        if (lineIdx >= 0) {
+          const sourceContext = this.lines.slice(
+            Math.max(0, lineIdx - 5),
+            Math.min(this.lines.length, lineIdx + 5)
+          ).join('\n');
+          for (const pattern of config.patterns) {
+            if (pattern.test(sourceContext)) {
+              return config.layer;
+            }
+          }
+        }
+      }
+    } else if (this.detectedFramework === 'django') {
+      for (const [key, config] of Object.entries(PythonAstParser.DJANGO_LAYERS)) {
+        // Check decorators
+        for (const pattern of config.decorators) {
+          if (pattern.test(decoratorStr)) {
+            return config.layer;
+          }
+        }
+        // Check bases
+        for (const base of bases) {
+          if (config.bases.some(b => base.includes(b))) {
+            return config.layer;
+          }
+        }
+      }
+    } else if (this.detectedFramework === 'flask') {
+      for (const [key, config] of Object.entries(PythonAstParser.FLASK_LAYERS)) {
+        // Check decorators
+        for (const pattern of config.decorators) {
+          if (pattern.test(decoratorStr)) {
+            return config.layer;
+          }
+        }
+      }
+    }
+
+    // Generic layer detection based on common patterns
+    if (decoratorStr.match(/@(get|post|put|delete|patch|route)/i)) {
+      return 'endpoint';
+    }
+    if (bases.some(b => b.includes('BaseModel') || b.includes('BaseSettings'))) {
+      return 'schema';
+    }
+    if (bases.some(b => b.includes('Model'))) {
+      return 'model';
+    }
+    if (name.toLowerCase().includes('service')) {
+      return 'service';
+    }
+    if (name.toLowerCase().includes('repository') || name.toLowerCase().includes('repo')) {
+      return 'repository';
+    }
+    if (name.toLowerCase().includes('controller')) {
+      return 'controller';
+    }
+    if (name.startsWith('test_') || name.startsWith('Test')) {
+      return 'test';
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Parse base classes from string
    */
   private parseBaseClasses(basesStr: string): string[] {
     if (!basesStr.trim()) return [];
@@ -434,19 +631,17 @@ export class PythonAstParser {
         depth--;
         current += char;
       } else if (char === ',' && depth === 0) {
-        const trimmed = current.trim();
-        const baseName = this.extractBaseClassName(trimmed);
-        if (baseName) bases.push(baseName);
+        const base = this.extractBaseClassName(current.trim());
+        if (base) bases.push(base);
         current = '';
       } else {
         current += char;
       }
     }
 
-    // Don't forget the last one
     if (current.trim()) {
-      const baseName = this.extractBaseClassName(current.trim());
-      if (baseName) bases.push(baseName);
+      const base = this.extractBaseClassName(current.trim());
+      if (base) bases.push(base);
     }
 
     return bases;
@@ -456,17 +651,11 @@ export class PythonAstParser {
    * Extract base class name, handling Generic[T], metaclass=X, etc.
    */
   private extractBaseClassName(baseStr: string): string | null {
-    // Skip metaclass=X
-    if (baseStr.includes('metaclass=')) return null;
+    if (baseStr.includes('metaclass=') || baseStr.includes('=')) return null;
     
-    // Skip keyword arguments
-    if (baseStr.includes('=')) return null;
-    
-    // Handle Generic[T] -> Generic
-    const genericMatch = baseStr.match(/^([\w.]+)(?:\[.*\])?$/);
-    if (genericMatch) {
-      const name = genericMatch[1];
-      // Skip 'object' as it's implicit
+    const match = baseStr.match(/^([\w.]+)(?:\[.*\])?$/);
+    if (match) {
+      const name = match[1];
       if (name === 'object') return null;
       return name;
     }
@@ -479,7 +668,6 @@ export class PythonAstParser {
    */
   private findBlockEnd(startLine: number, blockIndent: number): number {
     let endLine = startLine;
-    let hasContent = false;
 
     for (let i = startLine + 1; i < this.lines.length; i++) {
       const line = this.lines[i];
@@ -487,8 +675,6 @@ export class PythonAstParser {
 
       // Skip empty lines and comments
       if (trimmed === '' || trimmed.startsWith('#')) {
-        // If we've seen content and this is an empty line, might be end of block
-        // but continue to check next line
         continue;
       }
 
@@ -499,7 +685,6 @@ export class PythonAstParser {
         break;
       }
 
-      hasContent = true;
       endLine = i;
     }
 
@@ -513,7 +698,6 @@ export class PythonAstParser {
     const parameters: Parameter[] = [];
     if (!paramsStr.trim()) return parameters;
 
-    // Handle nested brackets (for type hints like Dict[str, int])
     let depth = 0;
     let current = '';
     const parts: string[] = [];
@@ -546,25 +730,50 @@ export class PythonAstParser {
    * Parse a single parameter
    */
   private parseParameter(paramStr: string): Parameter | null {
-    // Skip self, cls, *args, **kwargs
     const trimmed = paramStr.trim();
-    if (trimmed === 'self' || trimmed === 'cls') return null;
+    
+    // Skip self, cls, *args, **kwargs
+    if (['self', 'cls'].includes(trimmed)) return null;
     if (trimmed.startsWith('*')) return null;
 
-    // Parse parameter: name: Type = default
-    // Handle complex cases like: param: Optional[Dict[str, int]] = None
-    const paramMatch = trimmed.match(/^(\w+)(?:\s*:\s*([^=]+?))?(?:\s*=\s*(.+))?$/);
-    if (paramMatch) {
-      const name = paramMatch[1];
-      const type = paramMatch[2]?.trim() || 'Any';
-      const hasDefault = !!paramMatch[3];
-      const defaultValue = paramMatch[3]?.trim();
-
+    // Handle: name: Type = default
+    const fullMatch = trimmed.match(/^(\w+)\s*:\s*(.+?)\s*=\s*(.+)$/);
+    if (fullMatch) {
       return {
-        name,
-        type,
-        optional: hasDefault,
-        description: hasDefault ? `default: ${defaultValue}` : undefined
+        name: fullMatch[1],
+        type: fullMatch[2].trim(),
+        optional: true,
+        defaultValue: fullMatch[3].trim()
+      };
+    }
+
+    // Handle: name: Type
+    const typedMatch = trimmed.match(/^(\w+)\s*:\s*(.+)$/);
+    if (typedMatch) {
+      return {
+        name: typedMatch[1],
+        type: typedMatch[2].trim(),
+        optional: false
+      };
+    }
+
+    // Handle: name = default
+    const defaultMatch = trimmed.match(/^(\w+)\s*=\s*(.+)$/);
+    if (defaultMatch) {
+      return {
+        name: defaultMatch[1],
+        type: 'Any',
+        optional: true,
+        defaultValue: defaultMatch[2].trim()
+      };
+    }
+
+    // Handle: name only
+    if (/^\w+$/.test(trimmed)) {
+      return {
+        name: trimmed,
+        type: 'Any',
+        optional: false
       };
     }
 
@@ -572,82 +781,42 @@ export class PythonAstParser {
   }
 
   /**
-   * Extract docstring from the line after a definition
+   * Extract docstring from a block
    */
-  private extractDocstring(startLine: number, blockIndent: number): string | undefined {
+  private extractDocstring(startLine: number, indent: number): string | undefined {
     if (startLine >= this.lines.length) return undefined;
 
     const line = this.lines[startLine];
     const trimmed = line.trimStart();
-    const currentIndent = line.length - trimmed.length;
+    
+    // Check for docstring start
+    const quoteMatch = trimmed.match(/^("""|''')/);
+    if (!quoteMatch) return undefined;
 
-    // Docstring must be indented more than block
-    if (currentIndent <= blockIndent) return undefined;
-
-    // Check for docstring patterns
-    const tripleQuoteMatch = trimmed.match(/^("""|''')/);
-    if (!tripleQuoteMatch) return undefined;
-
-    const quote = tripleQuoteMatch[1];
+    const quote = quoteMatch[1];
     
     // Single line docstring
-    if (trimmed.match(new RegExp(`^${quote}.*${quote}$`))) {
-      return trimmed.slice(3, -3).trim();
+    if (trimmed.indexOf(quote, 3) !== -1) {
+      return trimmed.slice(3, trimmed.lastIndexOf(quote)).trim();
     }
 
     // Multi-line docstring
     let docstring = trimmed.slice(3);
     for (let i = startLine + 1; i < this.lines.length; i++) {
       const docLine = this.lines[i];
-      if (docLine.includes(quote)) {
-        docstring += '\n' + docLine.slice(0, docLine.indexOf(quote));
+      const endIndex = docLine.indexOf(quote);
+      if (endIndex !== -1) {
+        docstring += '\n' + docLine.slice(0, endIndex);
         break;
       }
-      docstring += '\n' + docLine;
+      docstring += '\n' + docLine.trim();
     }
 
     return docstring.trim();
   }
 
   /**
-   * Detect framework layer from decorators and base classes
-   */
-  private detectFrameworkLayer(decorators: string[], bases: string[]): string | undefined {
-    for (const [key, config] of Object.entries(PythonAstParser.FRAMEWORK_PATTERNS)) {
-      // Check decorators
-      for (const dec of decorators) {
-        const decName = dec.split('(')[0]; // Remove arguments
-        if (config.decorators.some(d => decName === d || decName.includes(d))) {
-          return config.layer;
-        }
-      }
-
-      // Check base classes
-      for (const base of bases) {
-        if (config.bases.some(b => base === b || base.endsWith(b))) {
-          return config.layer;
-        }
-      }
-    }
-
-    // Check filename for common patterns
-    const fileName = this.filePath.split(/[\\/]/).pop() || '';
-    if (fileName.startsWith('test_') || fileName.endsWith('_test.py')) return 'test';
-    if (fileName === 'models.py') return 'model';
-    if (fileName === 'views.py') return 'view';
-    if (fileName === 'serializers.py') return 'serializer';
-    if (fileName === 'admin.py') return 'admin';
-    if (fileName === 'forms.py') return 'form';
-    if (fileName === 'urls.py') return 'routing';
-    if (fileName === 'tasks.py') return 'task';
-    if (fileName === 'signals.py') return 'signal';
-    if (fileName === 'middleware.py') return 'middleware';
-
-    return undefined;
-  }
-
-  /**
-   * Flatten the element tree into a list while preserving parent-child relationships
+   * Flatten elements tree while maintaining parent-child relationships
    */
   private flattenElements(elements: ParsedElement[]): ParsedElement[] {
     const result: ParsedElement[] = [];
@@ -666,93 +835,6 @@ export class PythonAstParser {
   }
 
   /**
-   * Extract class name from ID
-   */
-  private getClassName(classId: string): string {
-    const match = classId.match(/:class:(\w+)(?:\$|:|$)/);
-    return match ? match[1] : 'Unknown';
-  }
-
-  /**
-   * Extract import statements
-   */
-  private extractImports(edges: CodeEdge[]): void {
-    // Match: import x, from x import y
-    const importPattern = /^(?:from\s+(\S+)\s+)?import\s+(.+)$/gm;
-    let match;
-
-    while ((match = importPattern.exec(this.content)) !== null) {
-      const fromModule = match[1];
-      const imports = match[2];
-
-      if (fromModule) {
-        edges.push({
-          from: this.filePath,
-          to: fromModule,
-          type: 'imports',
-          label: `from ${fromModule}`
-        });
-      } else {
-        // Handle multiple imports: import a, b, c
-        const modules = imports.split(',').map(m => {
-          const parts = m.trim().split(/\s+as\s+/);
-          return parts[0].trim();
-        });
-        for (const mod of modules) {
-          if (mod) {
-            edges.push({
-              from: this.filePath,
-              to: mod,
-              type: 'imports',
-              label: `import ${mod}`
-            });
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Extract framework-specific dependencies
-   */
-  private extractFrameworkDependencies(elements: ParsedElement[], edges: CodeEdge[]): void {
-    // Look for dependency injection patterns
-    for (const element of elements) {
-      if (element.type === 'method' && element.name === '__init__') {
-        // Check for injected dependencies in constructor
-        for (const param of element.parameters || []) {
-          // If parameter type ends with Service, Repository, Manager, etc.
-          if (param.type.match(/(Service|Repository|Manager|Client|Handler|Provider)$/)) {
-            edges.push({
-              from: element.parentId || '',
-              to: `dependency:${param.type}`,
-              type: 'uses',
-              label: `injects ${param.type}`
-            });
-          }
-        }
-      }
-
-      // Detect decorator-based dependencies (Depends in FastAPI)
-      if (element.decorators) {
-        for (const dec of element.decorators) {
-          if (dec.includes('Depends(')) {
-            const depMatch = dec.match(/Depends\((\w+)/);
-            if (depMatch) {
-              edges.push({
-                from: element.id,
-                to: `dependency:${depMatch[1]}`,
-                type: 'uses',
-                label: `depends on ${depMatch[1]}`
-              });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  /**
    * Create a CodeNode from ParsedElement
    */
   private createNode(element: ParsedElement): CodeNode {
@@ -761,21 +843,18 @@ export class PythonAstParser {
       Math.min(this.lines.length, element.endLine)
     ).join('\n');
 
-    // Build description
     let description = '';
     if (element.decorators.length > 0) {
-      description = `@${element.decorators.join(', @')}`;
+      description = element.decorators.slice(0, 3).join(' ');
     }
     if (element.layer) {
       description += description ? ` [${element.layer}]` : `[${element.layer}]`;
     }
     if (element.docstring) {
-      // Take first line of docstring
-      const firstLine = element.docstring.split('\n')[0].trim();
+      const firstLine = element.docstring.split('\n')[0].trim().slice(0, 100);
       description += description ? ` - ${firstLine}` : firstLine;
     }
 
-    // Determine visibility
     let visibility: 'public' | 'private' | 'protected' = 'public';
     if (element.isPrivate) visibility = 'private';
     else if (element.isProtected) visibility = 'protected';
@@ -808,8 +887,8 @@ export class PythonAstParser {
    */
   private generateSummary(element: ParsedElement): string {
     const layerStr = element.layer ? `[${element.layer}] ` : '';
-    const decorators = element.decorators.slice(0, 2).join(', @');
-    const decoratorStr = decorators ? `@${decorators} ` : '';
+    const decorators = element.decorators.slice(0, 2).join(' ');
+    const decoratorStr = decorators ? `${decorators} ` : '';
 
     if (element.type === 'class') {
       let summary = `${layerStr}${decoratorStr}class ${element.name}`;
@@ -823,16 +902,16 @@ export class PythonAstParser {
       const asyncStr = element.isAsync ? 'async ' : '';
       const staticStr = element.isStatic ? '@staticmethod ' : '';
       const classMethodStr = element.isClassMethod ? '@classmethod ' : '';
-      const propertyStr = element.isProperty ? '@property ' : '';
       
-      const params = element.parameters?.map(p => {
+      const params = element.parameters?.slice(0, 3).map(p => {
         let param = p.name;
         if (p.type && p.type !== 'Any') param += `: ${p.type}`;
-        if (p.optional) param += ' = ...';
         return param;
       }).join(', ') || '';
 
-      let summary = `${layerStr}${staticStr}${classMethodStr}${propertyStr}${asyncStr}def ${element.name}(${params})`;
+      const suffix = (element.parameters?.length || 0) > 3 ? ', ...' : '';
+
+      let summary = `${layerStr}${staticStr}${classMethodStr}${asyncStr}def ${element.name}(${params}${suffix})`;
       if (element.returnType) {
         summary += ` -> ${element.returnType}`;
       }
@@ -843,16 +922,53 @@ export class PythonAstParser {
   }
 
   /**
-   * Create module node for entry points
+   * Create module node for the file
    */
-  private createModuleNode(baseName: string): CodeNode {
-    // Try to extract module docstring
+  private createModuleNode(baseName: string, elements: ParsedElement[]): CodeNode {
+    // Detect if this is an app/main entry point
+    let moduleLayer = '';
+    let isEntryPoint = this.isEntryPointFile;
+
+    // Check for app = FastAPI() or app = Flask()
+    if (this.content.match(/^app\s*=\s*(FastAPI|Flask)\s*\(/m)) {
+      moduleLayer = 'app';
+      isEntryPoint = true;
+    }
+
+    // Check for if __name__ == "__main__":
+    if (this.hasMainBlock) {
+      isEntryPoint = true;
+    }
+
+    // Detect layer from elements
+    const layers = elements.map(e => e.layer).filter(Boolean);
+    if (layers.includes('app')) {
+      moduleLayer = 'app';
+    } else if (layers.includes('router') || layers.includes('blueprint')) {
+      moduleLayer = 'router';
+    } else if (layers.includes('endpoint') || layers.includes('route')) {
+      moduleLayer = 'endpoint';
+    } else if (layers.includes('view') || layers.includes('viewset')) {
+      moduleLayer = 'view';
+    } else if (layers.includes('model')) {
+      moduleLayer = 'model';
+    } else if (layers.includes('schema') || layers.includes('serializer')) {
+      moduleLayer = 'schema';
+    }
+
+    // Extract module docstring
     let docstring = '';
     if (this.lines.length > 0) {
       const firstLine = this.lines[0].trim();
       if (firstLine.startsWith('"""') || firstLine.startsWith("'''")) {
-        docstring = this.extractDocstring(-1, -1) || '';
+        docstring = this.extractDocstring(0, -1) || '';
       }
+    }
+
+    let description = moduleLayer ? `[${moduleLayer}] ` : '';
+    description += `Python module (${this.detectedFramework})`;
+    if (docstring) {
+      description += ` - ${docstring.split('\n')[0].slice(0, 80)}`;
     }
 
     return {
@@ -864,11 +980,17 @@ export class PythonAstParser {
       startLine: 1,
       endLine: this.lines.length,
       sourceCode: this.content,
-      isEntryPoint: true,
+      isEntryPoint,
+      isPrimaryEntry: isEntryPoint && (moduleLayer === 'app' || this.hasMainBlock),
       documentation: {
-        summary: `Python module ${baseName}`,
-        description: docstring || 'Python module',
-        persona: {} as any
+        summary: `${moduleLayer ? `[${moduleLayer}] ` : ''}${baseName}.py`,
+        description,
+        persona: {
+          developer: `Python module ${baseName} using ${this.detectedFramework}`,
+          'product-manager': `Module containing ${elements.length} components`,
+          architect: `${this.detectedFramework} module with ${moduleLayer || 'mixed'} layer elements`,
+          'business-analyst': `Code module: ${baseName}`
+        }
       }
     };
   }

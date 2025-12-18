@@ -14,12 +14,12 @@ export class FileLogger {
     }
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    this.logFilePath = path.join(logDir, `codebase-visualizer-${timestamp}.log`);
+    this.logFilePath = path.join(logDir, `mindframe-${timestamp}.log`);
     
     this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
     
     this.log('='.repeat(80));
-    this.log(`Codebase Visualizer Debug Log`);
+    this.log(`MindFrame Debug Log`);
     this.log(`Started: ${new Date().toISOString()}`);
     this.log(`Log file: ${this.logFilePath}`);
     this.log('='.repeat(80));

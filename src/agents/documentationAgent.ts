@@ -84,7 +84,7 @@ export class DocumentationAgent {
    * Initialize the OpenAI client
    */
   private initialize() {
-    const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+    const config = vscode.workspace.getConfiguration('mindframe');
     
     const apiKey = config.get<string>('litellm.apiKey') || 
                    process.env.OPENAI_API_KEY || 

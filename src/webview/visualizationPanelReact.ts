@@ -1,16 +1,20 @@
 import * as vscode from 'vscode';
-import { AnalysisResult, Persona, CodeNode, ClineContext } from '../types/types';
-import { ClineAdapter } from '../cline/adapter';
+import { AnalysisResult, Persona, CodeNode, AgentContext } from '../types/types';
+import { AgentAdapter } from '../agent/adapter';
 import { DocumentationGenerator } from '../documentation/generator';
 import { GraphBuilder } from '../graph/graphBuilder';
 import { RAGService } from '../rag/ragService';
+import { LangchainRagService } from '../rag/langchainRagService';
 import * as path from 'path';
+
+// Union type for both RAG service implementations
+type AnyRAGService = RAGService | LangchainRagService;
 
 export class VisualizationPanelReact {
   private panel: vscode.WebviewPanel | undefined;
   private context: vscode.ExtensionContext;
-  private clineAdapter: ClineAdapter;
-  private ragService: RAGService | undefined;
+  private agentAdapter: AgentAdapter;
+  private ragService: AnyRAGService | undefined;
   private docGenerator: DocumentationGenerator;
   private graphBuilder: GraphBuilder;
   private currentPersona: Persona = 'developer';
@@ -21,9 +25,9 @@ export class VisualizationPanelReact {
   private _isDisposed: boolean = false;
   private _onDisposeCallback: (() => void) | undefined;
 
-  constructor(context: vscode.ExtensionContext, clineAdapter: ClineAdapter, ragService?: RAGService) {
+  constructor(context: vscode.ExtensionContext, agentAdapter: AgentAdapter, ragService?: AnyRAGService) {
     this.context = context;
-    this.clineAdapter = clineAdapter;
+    this.agentAdapter = agentAdapter;
     this.ragService = ragService;
     this.docGenerator = new DocumentationGenerator();
     this.graphBuilder = new GraphBuilder();
@@ -95,8 +99,8 @@ export class VisualizationPanelReact {
         await this.handleNodeClick(message.nodeId);
         break;
       
-      case 'sendToCline':
-        await this.handleSendToCline(message.nodeId, message.query);
+      case 'sendToAgent':
+        await this.handleSendToAgent(message.nodeId, message.query);
         break;
       
       case 'askQuestion':
@@ -142,7 +146,7 @@ export class VisualizationPanelReact {
   }
 
   private sendApiKeyStatus() {
-    const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+    const config = vscode.workspace.getConfiguration('mindframe');
     const apiKey = config.get<string>('litellm.apiKey') || process.env.OPENAI_API_KEY;
     
     this.panel?.webview.postMessage({
@@ -161,7 +165,7 @@ export class VisualizationPanelReact {
         return;
       }
 
-      const docsJsonPath = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs.json');
+      const docsJsonPath = path.join(workspaceFolders[0].uri.fsPath, '.mindframe', 'docs.json');
       const fs = await import('fs');
       
       if (fs.existsSync(docsJsonPath)) {
@@ -189,7 +193,7 @@ export class VisualizationPanelReact {
     });
 
     if (apiKey) {
-      const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+      const config = vscode.workspace.getConfiguration('mindframe');
       await config.update('litellm.apiKey', apiKey, vscode.ConfigurationTarget.Global);
       
       // Reinitialize the LiteLLM service with new API key
@@ -203,7 +207,7 @@ export class VisualizationPanelReact {
 
   /**
    * Handle View Docs with Persona - 
-   * .doc_sync is updated during graph initialization and sync, so View Docs just reads from it
+   * .mindframe is updated during graph initialization and sync, so View Docs just reads from it
    * Uses LLM only for persona overview display (on-demand)
    */
   private async handleViewDocsWithPersona(
@@ -215,7 +219,7 @@ export class VisualizationPanelReact {
       const litellm = getLiteLLMService();
       litellm.reinitialize();
 
-      // Ensure RAG is initialized with existing docs from .doc_sync
+      // Ensure RAG is initialized with existing docs from .mindframe
       // (docs are already generated during graph initialization/sync)
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (workspaceFolders && workspaceFolders.length > 0) {
@@ -223,7 +227,7 @@ export class VisualizationPanelReact {
           const { RAGService } = await import('../rag/ragService');
           this.ragService = new RAGService();
           await this.ragService.initialize(workspaceFolders[0].uri);
-          console.log('RAG initialized from existing .doc_sync');
+          console.log('RAG initialized from existing .mindframe');
         }
       }
 
@@ -296,7 +300,7 @@ export class VisualizationPanelReact {
         persona
       );
 
-      const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.doc_sync', 'docs');
+      const docsFolder = path.join(workspaceFolders[0].uri.fsPath, '.mindframe', 'docs');
 
       // Notify webview that generation completed with docs data
       this.panel?.webview.postMessage({ 
@@ -401,7 +405,7 @@ export class VisualizationPanelReact {
 
   /**
    * Regenerate documentation after sync changes using AST only (no LLM)
-   * This updates .doc_sync folder which is the centralized data store
+   * This updates .mindframe folder which is the centralized data store
    */
   private async regenerateDocsAfterSync() {
     if (!this.currentAnalysis) return;
@@ -544,10 +548,11 @@ export class VisualizationPanelReact {
 
     let popupData: any;
 
-    // Try to load node details from .doc_sync/nodes/<nodeId>.json first
-    if (this.ragService) {
+    // Try to load node details from .mindframe/nodes/<nodeId>.json first
+    // Only available in legacy RAGService, not LangchainRagService
+    if (this.ragService && 'loadNodeDetails' in this.ragService) {
       try {
-        const nodeDetails = await this.ragService.loadNodeDetails(nodeId);
+        const nodeDetails = await (this.ragService as RAGService).loadNodeDetails(nodeId);
         if (nodeDetails) {
           // Generate signature for the node
           const signature = this.docGenerator.generateSignature(node);
@@ -568,17 +573,17 @@ export class VisualizationPanelReact {
             sourcePreview: signature,
             sourceCode: nodeDetails.sourceCode
           };
-          console.log('Loaded node details from .doc_sync JSON:', nodeDetails.name);
+          console.log('Loaded node details from .mindframe JSON:', nodeDetails.name);
         }
       } catch (error) {
         console.error('Failed to load node details from JSON:', error);
       }
     }
 
-    // Fallback to RAG service search
-    if (!popupData && this.ragService) {
+    // Fallback to RAG service search (only available in legacy RAGService)
+    if (!popupData && this.ragService && 'getComponentInfo' in this.ragService) {
       try {
-        const ragInfo = await this.ragService.getComponentInfo(node.label);
+        const ragInfo = await (this.ragService as RAGService).getComponentInfo(node.label);
         if (ragInfo) {
           const signature = this.docGenerator.generateSignature(node);
           popupData = {
@@ -670,15 +675,15 @@ export class VisualizationPanelReact {
     return patterns;
   }
 
-  private async handleSendToCline(nodeId: string, query: string) {
+  private async handleSendToAgent(nodeId: string, query: string) {
     if (!this.currentAnalysis) return;
 
     const node = this.currentAnalysis.graph.nodes.find(n => n.id === nodeId);
     if (!node) return;
 
-    // Check if Cline is available
-    const isClineAvailable = this.clineAdapter.isClineAvailable();
-    if (!isClineAvailable) {
+    // Check if Agent is available
+    const isAgentAvailable = this.agentAdapter.isAgentAvailable();
+    if (!isAgentAvailable) {
       vscode.window.showWarningMessage(
         'Cline extension is not installed. Please install Cline (saoudrizwan.claude-dev) to use this feature.',
         'Install Cline'
@@ -690,8 +695,8 @@ export class VisualizationPanelReact {
       return;
     }
 
-    // Build context for Cline
-    const context: ClineContext = {
+    // Build context for Agent
+    const context: AgentContext = {
       nodeId: node.id,
       nodeName: node.label,
       nodeType: node.type,
@@ -704,15 +709,15 @@ export class VisualizationPanelReact {
       query: query
     };
 
-    // Send to Cline
-    const result = await this.clineAdapter.sendModificationRequest(context);
+    // Send to Agent
+    const result = await this.agentAdapter.sendModificationRequest(context);
     
     if (result.success) {
       vscode.window.showInformationMessage(
         result.explanation || 'Request copied to clipboard. Paste (Ctrl+V) in Cline to start!'
       );
     } else {
-      vscode.window.showErrorMessage(result.error || 'Failed to send to Cline');
+      vscode.window.showErrorMessage(result.error || 'Failed to send to Agent');
     }
   }
 
@@ -729,10 +734,21 @@ export class VisualizationPanelReact {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (workspaceFolders && workspaceFolders.length > 0) {
         try {
-          const { RAGService } = await import('../rag/ragService');
-          this.ragService = new RAGService();
-          await this.ragService.initialize(workspaceFolders[0].uri);
-          console.log('RAG service initialized on-demand');
+          // Check if we should use LangChain RAG
+          const config = vscode.workspace.getConfiguration('mindframe');
+          const useLangchain = config.get<boolean>('rag.useLangchain', false);
+          
+          if (useLangchain) {
+            const { getLangchainRagService } = await import('../rag/langchainRagService');
+            this.ragService = getLangchainRagService() as any;
+          } else {
+            const { RAGService } = await import('../rag/ragService');
+            this.ragService = new RAGService();
+          }
+          if (this.ragService) {
+            await this.ragService.initialize(workspaceFolders[0].uri);
+            console.log('RAG service initialized on-demand');
+          }
         } catch (error) {
           console.error('Failed to initialize RAG service:', error);
         }
@@ -743,6 +759,7 @@ export class VisualizationPanelReact {
           command: 'questionAnswer',
           answer: 'RAG service is not available. Please analyze the workspace first by running "Analyze Codebase" command.',
           relevantNodes: [],
+          sources: [],
           confidence: 'low'
         });
         return;
@@ -757,64 +774,64 @@ export class VisualizationPanelReact {
         loading: true
       });
 
-      // Search both local and external MCP servers
-      console.log('Searching local and external sources...');
-      const { local: localResults, external: externalResults } = 
-        await this.ragService.searchWithExternal(question, 5);
+      // Check if using LangChain RAG (has query method with sources)
+      const isLangchainRag = 'query' in this.ragService && typeof (this.ragService as any).query === 'function';
       
-      // Build combined context for LLM
-      let contextParts: string[] = [];
-      
-      // Add local results
-      if (localResults.length > 0) {
-        contextParts.push('## Current Project Results:\n');
-        for (const result of localResults) {
-          const name = result.metadata?.name || 'Unknown';
-          const type = result.metadata?.type || 'unknown';
-          const summary = result.metadata?.aiSummary || result.content?.substring(0, 200) || '';
-          contextParts.push(`- **${name}** (${type}): ${summary}\n`);
+      if (isLangchainRag) {
+        // Use LangChain RAG with sources
+        console.log('Using LangChain RAG service...');
+        const result = await (this.ragService as any).query(question);
+        
+        console.log('LangChain RAG returned:', result.answer?.substring(0, 100));
+        
+        // Send answer with sources back to webview
+        this.panel?.webview.postMessage({
+          command: 'questionAnswer',
+          answer: result.answer,
+          sources: result.sources || [],
+          relevantNodes: [],
+          confidence: result.sources?.length > 0 ? 'high' : 'low'
+        });
+      } else {
+        // Use default RAG service - cast to access the methods
+        console.log('Using default RAG service...');
+        const defaultRagService = this.ragService as RAGService;
+        
+        // Search both local and external MCP servers
+        const { local: localResults, external: externalResults } = 
+          await defaultRagService.searchWithExternal(question, 5);
+        
+        // Get answer from RAG service
+        const result = await defaultRagService.answerQuestion(question);
+        
+        // Append external project info if available
+        let enhancedAnswer = result.answer;
+        if (externalResults.length > 0 && externalResults.some((e: any) => e.results.length > 0)) {
+          const externalSources = externalResults
+            .filter((e: any) => e.results.length > 0)
+            .map((e: any) => e.source);
+          enhancedAnswer += `\n\n---\n*Also searched: ${externalSources.join(', ')}*`;
         }
-      }
-      
-      // Add external results
-      for (const { source, results } of externalResults) {
-        if (results.length > 0) {
-          contextParts.push(`\n## ${source} Results:\n`);
-          for (const result of results.slice(0, 5)) {
-            contextParts.push(`- **${result.name}** (${result.type}): ${result.summary || ''}\n`);
-          }
-        }
-      }
+        
+        console.log('RAG service returned:', result.answer?.substring(0, 100));
 
-      // Get answer from RAG service (will use combined context)
-      console.log('Calling RAG service with context...');
-      const result = await this.ragService.answerQuestion(question);
-      
-      // Append external project info if available
-      let enhancedAnswer = result.answer;
-      if (externalResults.length > 0 && externalResults.some(e => e.results.length > 0)) {
-        const externalSources = externalResults
-          .filter(e => e.results.length > 0)
-          .map(e => e.source);
-        enhancedAnswer += `\n\n---\n*Also searched: ${externalSources.join(', ')}*`;
+        // Send answer back to webview
+        this.panel?.webview.postMessage({
+          command: 'questionAnswer',
+          answer: enhancedAnswer,
+          relevantNodes: result.relevantNodes,
+          sources: [],
+          confidence: result.confidence,
+          externalSources: externalResults.filter((e: any) => e.results.length > 0).map((e: any) => e.source)
+        });
       }
-      
-      console.log('RAG service returned:', result.answer?.substring(0, 100));
-
-      // Send answer back to webview
-      this.panel?.webview.postMessage({
-        command: 'questionAnswer',
-        answer: enhancedAnswer,
-        relevantNodes: result.relevantNodes,
-        confidence: result.confidence,
-        externalSources: externalResults.filter(e => e.results.length > 0).map(e => e.source)
-      });
     } catch (error) {
       console.error('Error answering question:', error);
       this.panel?.webview.postMessage({
         command: 'questionAnswer',
         answer: 'An error occurred while searching. Please try again.',
         relevantNodes: [],
+        sources: [],
         confidence: 'low'
       });
     }
@@ -870,7 +887,7 @@ export class VisualizationPanelReact {
   /**
    * Update the RAG service (useful when panel is reused)
    */
-  updateRagService(ragService: RAGService) {
+  updateRagService(ragService: AnyRAGService) {
     this.ragService = ragService;
     console.log('RAG service updated on visualization panel');
   }
@@ -967,7 +984,7 @@ export class VisualizationPanelReact {
       try {
         console.log(`Branch switched to ${branchName}, triggering re-analysis...`);
         // Execute the refresh command to get fresh analysis
-        await vscode.commands.executeCommand('codebase-visualizer.refreshVisualization');
+        await vscode.commands.executeCommand('mindframe.refreshVisualization');
       } catch (error) {
         console.error('Failed to refresh after branch switch:', error);
       }

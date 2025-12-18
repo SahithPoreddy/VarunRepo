@@ -100,7 +100,7 @@ export class BranchAwareGraphManager {
    */
   async initialize(workspaceRoot: string): Promise<boolean> {
     this.workspaceRoot = workspaceRoot;
-    this.cacheDir = path.join(workspaceRoot, '.doc_sync', 'branch_cache');
+    this.cacheDir = path.join(workspaceRoot, '.mindframe', 'branch_cache');
     this.branchStatesPath = path.join(this.cacheDir, 'branch_states.json');
     
     const gitPath = path.join(workspaceRoot, '.git');
@@ -534,7 +534,7 @@ export class BranchAwareGraphManager {
    */
   private async getAllSourceFiles(): Promise<string[]> {
     const patterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', '**/*.java', '**/*.py'];
-    const excludes = ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**', '**/.doc_sync/**'];
+    const excludes = ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**', '**/.mindframe/**'];
     
     const files: string[] = [];
     

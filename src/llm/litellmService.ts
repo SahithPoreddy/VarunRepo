@@ -33,7 +33,7 @@ export class LiteLLMService {
    */
   private initialize() {
     // Get configuration from VS Code settings
-    const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+    const config = vscode.workspace.getConfiguration('mindframe');
     
     // LiteLLM API base URL (if using LiteLLM proxy)
     const litellmBaseUrl = config.get<string>('litellm.baseUrl') || 
@@ -103,7 +103,7 @@ export class LiteLLMService {
       });
 
       if (apiKey) {
-        const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+        const config = vscode.workspace.getConfiguration('mindframe');
         await config.update('litellm.apiKey', apiKey, vscode.ConfigurationTarget.Global);
         
         const model = await vscode.window.showQuickPick([
@@ -133,7 +133,7 @@ export class LiteLLMService {
       });
 
       if (baseUrl) {
-        const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+        const config = vscode.workspace.getConfiguration('mindframe');
         await config.update('litellm.baseUrl', baseUrl, vscode.ConfigurationTarget.Global);
 
         const apiKey = await vscode.window.showInputBox({
@@ -187,33 +187,47 @@ export class LiteLLMService {
   }
 
   /**
-   * Generate a summary for a code node
+   * Generate a comprehensive summary for a code node
+   * Optimized for RAG retrieval with rich context
    */
   async generateSummary(node: CodeNode): Promise<string> {
     if (!this.isReady()) {
       throw new Error('LiteLLM is not configured');
     }
 
-    const prompt = `Analyze this ${node.language} code and provide a concise 1-2 sentence summary of what it does:
+    const paramsInfo = node.parameters ? `**Parameters**: ${node.parameters.map(p => `${p.name}: ${p.type || 'any'}`).join(', ')}` : '';
+    const returnInfo = node.returnType ? `**Returns**: ${node.returnType}` : '';
+
+    const prompt = `Analyze this ${node.language} code and provide a COMPREHENSIVE summary optimized for semantic search and Q&A retrieval.
 
 \`\`\`${node.language}
-${node.sourceCode.slice(0, 2000)}${node.sourceCode.length > 2000 ? '\n// ... (truncated)' : ''}
+${node.sourceCode.slice(0, 3000)}${node.sourceCode.length > 3000 ? '\n// ... (truncated)' : ''}
 \`\`\`
 
-Name: ${node.label}
-Type: ${node.type}
+**Name**: ${node.label}
+**Type**: ${node.type}
+**File**: ${node.filePath}
+${paramsInfo}
+${returnInfo}
 
-Provide ONLY the summary, no code or additional formatting.`;
+Provide a DETAILED summary (5-7 sentences) that includes:
+1. **What it does** - Primary purpose and functionality
+2. **How it works** - Key implementation approach, algorithms, or patterns used
+3. **When to use it** - Use cases, scenarios, or conditions for calling this code
+4. **Key dependencies** - What other code/modules it relies on or interacts with
+5. **Important behaviors** - Error handling, edge cases, side effects, or state changes
+
+Write in a natural, searchable way so developers can find this code when asking questions like "how does X work" or "where is the code that does Y".`;
 
     try {
       const response = await this.client!.chat.completions.create({
         model: this.model,
         messages: [
-          { role: 'system', content: 'You are a code documentation expert. Provide concise, accurate summaries.' },
+          { role: 'system', content: 'You are a code documentation expert creating content for semantic search. Write detailed, context-rich summaries that help developers understand and find code through natural language questions.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.2,
-        max_tokens: 200,
+        max_tokens: 500,
       });
 
       return response.choices[0]?.message?.content || '';
@@ -304,7 +318,7 @@ Be thorough, informative, and write in a professional tone.`;
 
   /**
    * Generate comprehensive persona-specific documentation for a code node
-   * Optimized for faster generation with concise prompts
+   * Optimized for RAG retrieval with rich, searchable content
    */
   async generatePersonaDocumentation(node: CodeNode, persona: Persona): Promise<{
     summary: string;
@@ -313,6 +327,7 @@ Be thorough, informative, and write in a professional tone.`;
     sampleCode?: string;
     complexity: 'low' | 'medium' | 'high';
     personaInsights: string;
+    searchableTerms?: string;
   }> {
     if (!this.isReady()) {
       throw new Error('LiteLLM is not configured');
@@ -320,41 +335,47 @@ Be thorough, informative, and write in a professional tone.`;
 
     const systemPrompt = this.getSystemPrompt(persona);
     
-    // Truncate source code more aggressively for speed
-    const maxCodeLength = 2000;
+    // Allow more code for better context
+    const maxCodeLength = 4000;
     const truncatedCode = node.sourceCode.slice(0, maxCodeLength);
     
-    const prompt = `Document this ${node.language} ${node.type}:
+    const paramsInfo = node.parameters ? `**Parameters**: ${node.parameters.map(p => `${p.name}: ${p.type || 'any'}`).join(', ')}` : '';
+    const returnInfo = node.returnType ? `**Returns**: ${node.returnType}` : '';
+    
+    const prompt = `Create COMPREHENSIVE documentation for this ${node.language} ${node.type} optimized for RAG-based Q&A retrieval.
 
 \`\`\`${node.language}
 ${truncatedCode}${node.sourceCode.length > maxCodeLength ? '\n// ...' : ''}
 \`\`\`
 
-**${node.label}** (${node.type}) - ${node.filePath}
-${node.parameters ? `Params: ${node.parameters.map(p => `${p.name}: ${p.type}`).join(', ')}` : ''}
-${node.returnType ? `Returns: ${node.returnType}` : ''}
+**Name**: ${node.label}
+**Type**: ${node.type}
+**File Path**: ${node.filePath}
+${paramsInfo}
+${returnInfo}
 
-Return JSON:
+Return JSON with RICH, DETAILED content (this will be used for semantic search to answer developer questions):
 {
-  "summary": "2-3 sentence overview",
-  "detailedDescription": "5-8 sentences explaining purpose, how it works, and key logic",
-  "keyPoints": ["3-5 important points"],
-  "sampleCode": "One brief usage example",
+  "summary": "5-7 sentence comprehensive overview covering: what this code does, WHY it exists, WHEN it should be used, HOW it fits into the larger system, and any important behaviors or side effects. Write naturally so it's searchable.",
+  "detailedDescription": "10-15 sentences providing deep technical explanation including: step-by-step breakdown of the implementation, algorithms or patterns used, data transformations, control flow, error handling approach, state management, and integration points with other code. Explain the 'why' behind design decisions.",
+  "keyPoints": ["8-10 important facts about this code. Each point should be a complete sentence explaining a key aspect: what it does, edge cases it handles, dependencies, performance characteristics, configuration options, common use patterns, etc."],
+  "sampleCode": "2-3 realistic usage examples showing different scenarios (basic usage, with options, error handling)",
   "complexity": "low|medium|high",
-  "personaInsights": "2-3 sentences of ${persona}-specific advice"
+  "personaInsights": "4-5 sentences of ${persona}-specific guidance: for developers - how to extend/modify/debug this code; for architects - how this fits the system design; for PMs - what user value this enables; for BAs - what business logic this implements.",
+  "searchableTerms": "Alternative ways developers might ask about this code: synonyms, related concepts, problem descriptions this solves"
 }
 
-Be concise and practical.`;
+Be VERBOSE and COMPREHENSIVE - this content will be used for semantic search to answer developer questions about the codebase.`;
 
     try {
       const response = await this.client!.chat.completions.create({
         model: this.model,
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: systemPrompt + '\n\nIMPORTANT: Generate VERBOSE, DETAILED content optimized for semantic search and RAG retrieval. Developers will ask natural language questions and this content must help them find and understand this code.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 1000,
+        max_tokens: 2000,
       });
 
       const content = response.choices[0]?.message?.content || '{}';
@@ -370,47 +391,65 @@ Be concise and practical.`;
   }
 
   /**
-   * Generate technical details for a code node
+   * Generate comprehensive technical details for a code node
+   * Optimized for RAG retrieval with rich, searchable content
    */
   async generateTechnicalDetails(node: CodeNode): Promise<{
     summary: string;
     purpose: string;
     keyFeatures: string[];
+    howItWorks?: string;
     dependencies: string[];
+    usageScenarios?: string[];
+    errorHandling?: string;
     complexity: 'low' | 'medium' | 'high';
+    relatedConcepts?: string[];
   }> {
     if (!this.isReady()) {
       throw new Error('LiteLLM is not configured');
     }
 
-    const prompt = `Analyze this ${node.language} code and provide technical details in JSON format:
+    const paramsInfo = node.parameters ? `**Parameters**: ${node.parameters.map(p => `${p.name}: ${p.type || 'any'}`).join(', ')}` : '';
+    const returnInfo = node.returnType ? `**Returns**: ${node.returnType}` : '';
+
+    const prompt = `Analyze this ${node.language} code and provide COMPREHENSIVE technical details optimized for RAG Q&A retrieval.
 
 \`\`\`${node.language}
-${node.sourceCode.slice(0, 3000)}${node.sourceCode.length > 3000 ? '\n// ... (truncated)' : ''}
+${node.sourceCode.slice(0, 4000)}${node.sourceCode.length > 4000 ? '\n// ... (truncated)' : ''}
 \`\`\`
 
-Name: ${node.label}
-Type: ${node.type}
-File: ${node.filePath}
+**Name**: ${node.label}
+**Type**: ${node.type}
+**File**: ${node.filePath}
+${paramsInfo}
+${returnInfo}
 
-Respond with ONLY valid JSON in this exact format:
+Respond with ONLY valid JSON. Be VERBOSE - this is for semantic search:
 {
-  "summary": "3-4 sentence comprehensive summary",
-  "purpose": "What problem this code solves (2-3 sentences)",
-  "keyFeatures": ["feature1 - with explanation", "feature2 - with explanation", "at least 5 features"],
-  "dependencies": ["external library or module names used"],
-  "complexity": "low" | "medium" | "high"
+  "summary": "7-10 sentence comprehensive technical summary covering: primary functionality, implementation approach, algorithms used, data structures, control flow, integration points, and notable design decisions. Write naturally so developers can find this through Q&A.",
+  "purpose": "5-7 sentences explaining: what business/technical problem this solves, why this approach was chosen, what alternatives exist, when to use vs not use this code, and what would break if this didn't exist.",
+  "keyFeatures": [
+    "Feature 1: Detailed explanation of what it does, how it works, and why it matters (2-3 sentences each)",
+    "Feature 2: Include implementation details, edge cases handled, configuration options",
+    "...provide 8-12 detailed feature descriptions"
+  ],
+  "howItWorks": "Step-by-step explanation of the code execution flow, data transformations, and key decision points (8-10 sentences)",
+  "dependencies": ["List ALL external libraries, modules, services, or APIs this code depends on with brief explanation of why each is needed"],
+  "usageScenarios": ["Scenario 1: When and how to use this code", "Scenario 2: Another use case", "...3-5 realistic scenarios"],
+  "errorHandling": "How this code handles errors, edge cases, and failure modes (3-4 sentences)",
+  "complexity": "low|medium|high",
+  "relatedConcepts": ["List related patterns, concepts, or other parts of the codebase this connects to"]
 }`;
 
     try {
       const response = await this.client!.chat.completions.create({
         model: this.model,
         messages: [
-          { role: 'system', content: 'You are a code analysis expert. Respond with valid JSON only. Be thorough and detailed.' },
+          { role: 'system', content: 'You are a code analysis expert creating content for semantic search. Generate VERBOSE, DETAILED content that helps developers find and understand code through natural language Q&A. Respond with valid JSON only.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.2,
-        max_tokens: 800,
+        max_tokens: 2000,
       });
 
       const content = response.choices[0]?.message?.content || '{}';

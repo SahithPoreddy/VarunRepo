@@ -1367,7 +1367,7 @@ const DocsPanel = ({
             <p style={{ margin: 0, color: '#fbbf24', fontSize: '11px', lineHeight: 1.6 }}>
               ⚠️ <strong>Rule-Based Documentation</strong>: This documentation was generated using pattern matching. 
               For richer, more detailed AI-generated docs, configure your API key in VS Code settings 
-              (codebaseVisualizer.litellm.apiKey).
+              (mindframe.litellm.apiKey).
             </p>
           </div>
         )}
@@ -1380,7 +1380,7 @@ const DocsPanel = ({
 const NodePopup = ({
   data,
   onClose,
-  onSendToCline,
+  onSendToAgent,
   onOpenFile,
   allNodes,
   nodeDocs,
@@ -1388,7 +1388,7 @@ const NodePopup = ({
 }: {
   data: PopupData;
   onClose: () => void;
-  onSendToCline: (nodeId: string, query: string) => void;
+  onSendToAgent: (nodeId: string, query: string) => void;
   onOpenFile: (filePath: string, line?: number) => void;
   allNodes: NodeData[];
   nodeDocs?: any; // Docs from docs.json
@@ -1407,9 +1407,9 @@ const NodePopup = ({
   const label = data?.label || 'Unknown';
   const nodeType = data?.type || 'unknown';
 
-  const handleSendToCline = () => {
+  const handleSendToAgent = () => {
     if (!query.trim() || !data?.nodeId) return;
-    onSendToCline(data.nodeId, query);
+    onSendToAgent(data.nodeId, query);
     setQuery('');
   };
 
@@ -2130,7 +2130,7 @@ const NodePopup = ({
               />
 
               <button
-                onClick={handleSendToCline}
+                onClick={handleSendToAgent}
                 disabled={!query.trim()}
                 style={{
                   background: query.trim() 
@@ -2195,6 +2195,7 @@ const App = () => {
   const [qaAnswer, setQaAnswer] = useState<{
     answer: string;
     relevantNodes: Array<{ name: string; type: string; summary: string; filePath: string; score: number }>;
+    sources: Array<{ filePath: string; startLine: number; endLine: number; snippet: string; relevanceScore: number; name: string; type: string }>;
     confidence: 'high' | 'medium' | 'low';
   } | null>(null);
   const [qaLoading, setQaLoading] = useState(false);
@@ -2783,6 +2784,7 @@ const App = () => {
           setQaAnswer({
             answer: message.answer,
             relevantNodes: message.relevantNodes || [],
+            sources: message.sources || [],
             confidence: message.confidence || 'low'
           });
           // Add to history
@@ -2876,10 +2878,10 @@ const App = () => {
     }
   }, [graphData]);
 
-  // Handle send to Cline - FIXED: Now sends nodeId and query correctly
-  const handleSendToCline = useCallback((nodeId: string, query: string) => {
+  // Handle send to Agent - FIXED: Now sends nodeId and query correctly
+  const handleSendToAgent = useCallback((nodeId: string, query: string) => {
     vscode.postMessage({
-      command: 'sendToCline',
+      command: 'sendToAgent',
       nodeId: nodeId,
       query: query,
     });
@@ -3366,7 +3368,7 @@ const App = () => {
             setPopupData(null);
             setSelectedNodeId(null); // Clear path highlighting when popup closes
           }}
-          onSendToCline={handleSendToCline}
+          onSendToAgent={handleSendToAgent}
           onOpenFile={handleOpenFile}
           allNodes={graphData?.nodes || []}
           nodeDocs={getNodeDocs(popupData.nodeId)}
@@ -3781,6 +3783,124 @@ const App = () => {
                                 height: '100%',
                                 width: `${Math.min(100, node.score * 50)}%`,
                                 background: 'linear-gradient(90deg, #64ffda 0%, #38bdf8 100%)',
+                                borderRadius: '2px',
+                              }} />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sources Section - Clickable file links from LangChain RAG */}
+                {qaAnswer.sources && qaAnswer.sources.length > 0 && (
+                  <div style={{
+                    marginTop: '20px',
+                    padding: '16px',
+                    borderRadius: '14px',
+                    background: 'rgba(30, 41, 59, 0.4)',
+                    border: '1px solid rgba(56, 189, 248, 0.1)',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      marginBottom: '14px',
+                    }}>
+                      <span style={{ fontSize: '14px' }}>📎</span>
+                      <h4 style={{ color: '#94a3b8', margin: 0, fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Sources ({qaAnswer.sources.length})
+                      </h4>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {qaAnswer.sources.map((source, i) => (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            // Open file at specific line
+                            vscode.postMessage({
+                              command: 'openFile',
+                              filePath: source.filePath,
+                              line: source.startLine
+                            });
+                          }}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '10px',
+                            background: 'rgba(15, 23, 42, 0.6)',
+                            border: '1px solid rgba(56, 189, 248, 0.08)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseOver={(e) => {
+                            e.currentTarget.style.background = 'rgba(56, 189, 248, 0.08)';
+                            e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.2)';
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.background = 'rgba(15, 23, 42, 0.6)';
+                            e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.08)';
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ color: '#38bdf8', fontWeight: 600, fontSize: '13px' }}>{source.name}</span>
+                            <span style={{
+                              fontSize: '10px',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background: 'rgba(56, 189, 248, 0.1)',
+                              color: '#38bdf8',
+                              fontWeight: 500,
+                            }}>
+                              {source.type}
+                            </span>
+                          </div>
+                          <div style={{ 
+                            color: '#64748b', 
+                            fontSize: '11px', 
+                            marginTop: '6px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '4px',
+                          }}>
+                            <span>📁</span>
+                            <span style={{ 
+                              overflow: 'hidden', 
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {source.filePath.split(/[/\\]/).slice(-2).join('/')}:{source.startLine}
+                            </span>
+                          </div>
+                          {source.snippet && (
+                            <div style={{
+                              marginTop: '8px',
+                              padding: '8px',
+                              borderRadius: '6px',
+                              background: 'rgba(15, 23, 42, 0.8)',
+                              fontSize: '11px',
+                              fontFamily: 'monospace',
+                              color: '#94a3b8',
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              maxHeight: '60px',
+                              overflow: 'hidden',
+                            }}>
+                              {source.snippet}
+                            </div>
+                          )}
+                          {source.relevanceScore > 0 && (
+                            <div style={{
+                              marginTop: '8px',
+                              height: '3px',
+                              borderRadius: '2px',
+                              background: 'rgba(56, 189, 248, 0.1)',
+                              overflow: 'hidden',
+                            }}>
+                              <div style={{
+                                height: '100%',
+                                width: `${Math.min(100, source.relevanceScore * 100)}%`,
+                                background: 'linear-gradient(90deg, #38bdf8 0%, #a78bfa 100%)',
                                 borderRadius: '2px',
                               }} />
                             </div>

@@ -1,6 +1,6 @@
 {
-  "name": "codebase-visualizer",
-  "displayName": "Codebase Visualizer with Agent Assist",
+  "name": "mindframe",
+  "displayName": "MindFrame",
   "description": "Interactive codebase visualization with AI-powered documentation and intelligent code assistance",
   "version": "0.1.0",
   "engines": {
@@ -22,75 +22,75 @@
   "contributes": {
     "commands": [
       {
-        "command": "codebase-visualizer.showVisualization",
+        "command": "mindframe.showVisualization",
         "title": "Show Codebase Visualization",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.refreshVisualization",
+        "command": "mindframe.refreshVisualization",
         "title": "Refresh Visualization",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.changePersona",
+        "command": "mindframe.changePersona",
         "title": "Change Documentation Persona",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.openLogFile",
+        "command": "mindframe.openLogFile",
         "title": "Open Debug Log File",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.configureLiteLLM",
+        "command": "mindframe.configureLiteLLM",
         "title": "Configure LiteLLM API",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.generateDocsWithAI",
+        "command": "mindframe.generateDocsWithAI",
         "title": "Generate Documentation with AI",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.installGitHooks",
+        "command": "mindframe.installGitHooks",
         "title": "Install Git Hooks",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebase-visualizer.uninstallGitHooks",
+        "command": "mindframe.uninstallGitHooks",
         "title": "Uninstall Git Hooks",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebaseVisualizer.showMCPStatus",
+        "command": "mindframe.showMCPStatus",
         "title": "Manage MCP Connections",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebaseVisualizer.connectMCPServers",
+        "command": "mindframe.connectMCPServers",
         "title": "Connect to External Projects (MCP)",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebaseVisualizer.disconnectMCPServers",
+        "command": "mindframe.disconnectMCPServers",
         "title": "Disconnect MCP Servers",
-        "category": "Codebase Visualizer"
+        "category": "MindFrame"
       },
       {
-        "command": "codebaseVisualizer.addToClineMCP",
-        "title": "Add This Project to Cline MCP",
-        "category": "Codebase Visualizer"
+        "command": "mindframe.addToAgentMCP",
+        "title": "Add This Project to Agent MCP",
+        "category": "MindFrame"
       },
       {
-        "command": "codebaseVisualizer.removeFromClineMCP",
-        "title": "Remove Project from Cline MCP",
-        "category": "Codebase Visualizer"
+        "command": "mindframe.removeFromAgentMCP",
+        "title": "Remove Project from Agent MCP",
+        "category": "MindFrame"
       }
     ],
     "configuration": {
-      "title": "Codebase Visualizer",
+      "title": "MindFrame",
       "properties": {
-        "codebaseVisualizer.defaultPersona": {
+        "mindframe.defaultPersona": {
           "type": "string",
           "enum": [
             "developer",
@@ -101,7 +101,7 @@
           "default": "developer",
           "description": "Default persona for documentation generation"
         },
-        "codebaseVisualizer.graphLayout": {
+        "mindframe.graphLayout": {
           "type": "string",
           "enum": [
             "hierarchical",
@@ -111,32 +111,42 @@
           "default": "hierarchical",
           "description": "Graph layout algorithm"
         },
-        "codebaseVisualizer.maxDepth": {
+        "mindframe.maxDepth": {
           "type": "number",
           "default": 3,
           "description": "Maximum depth for code analysis"
         },
-        "codebaseVisualizer.clineIntegration": {
+        "mindframe.agentIntegration": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Cline integration for code modifications"
+          "description": "Enable AI Agent integration for code modifications"
         },
-        "codebaseVisualizer.litellm.enabled": {
+        "mindframe.litellm.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable LiteLLM for AI-powered documentation generation"
         },
-        "codebaseVisualizer.litellm.apiKey": {
+        "mindframe.rag.useLangchain": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use LangChain-based RAG with OpenAI embeddings and Cohere reranking (requires OPENAI_API_KEY in .env)"
+        },
+        "mindframe.rag.cohereApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Cohere API key for reranking (optional, improves search quality)"
+        },
+        "mindframe.litellm.apiKey": {
           "type": "string",
           "default": "",
           "description": "API key for LiteLLM (OpenAI, Anthropic, or LiteLLM proxy key)"
         },
-        "codebaseVisualizer.litellm.baseUrl": {
+        "mindframe.litellm.baseUrl": {
           "type": "string",
           "default": "https://api.openai.com/v1",
           "description": "Base URL for LiteLLM API (use http://localhost:4000 for local LiteLLM proxy)"
         },
-        "codebaseVisualizer.litellm.model": {
+        "mindframe.litellm.model": {
           "type": "string",
           "default": "gpt-4o-mini",
           "enum": [
@@ -152,7 +162,7 @@
           ],
           "description": "LLM model to use for documentation generation"
         },
-        "codebaseVisualizer.mcpServers": {
+        "mindframe.mcpServers": {
           "type": "array",
           "default": [],
           "description": "MCP servers for querying external project documentation",
@@ -223,10 +233,12 @@
     "@types/dagre": "^0.7.53",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "cohere-ai": "^7.14.0",
     "dagre": "^0.8.5",
+    "dotenv": "^16.4.0",
     "java-parser": "^2.0.0",
     "marked": "^17.0.1",
-    "openai": "^6.10.0",
+    "openai": "^4.76.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "reactflow": "^11.11.4",

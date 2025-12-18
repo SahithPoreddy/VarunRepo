@@ -1,23 +1,25 @@
 import * as vscode from 'vscode';
 import { VisualizationPanelReact } from './webview/visualizationPanelReact';
 import { WorkspaceAnalyzer } from './analyzers/workspaceAnalyzer';
-import { ClineAdapter } from './cline/adapter';
+import { AgentAdapter } from './agent/adapter';
 import { FileLogger } from './utils/fileLogger';
 import { CodebaseDocGenerator } from './documentation/codebaseDocGenerator';
 import { RAGService } from './rag/ragService';
+import { LangchainRagService, getLangchainRagService, shouldUseLangchainRag } from './rag/langchainRagService';
+import { IRAGService } from './rag/types';
 import { getLiteLLMService } from './llm/litellmService';
 import { GitWatcher } from './git/gitWatcher';
 import { FileHashCache } from './cache/fileHashCache';
 import { getHooksManager, GitHooksManager } from './git/hooksManager';
 import { getMCPClientManager, disposeMCPClientManager } from './mcp/mcpClientManager';
-import { getClineMCPManager } from './mcp/clineMCPManager';
+import { getAgentMCPManager } from './mcp/agentMCPManager';
 
 let visualizationPanel: VisualizationPanelReact | undefined;
 let workspaceAnalyzer: WorkspaceAnalyzer;
-let clineAdapter: ClineAdapter;
+let agentAdapter: AgentAdapter;
 let logger: FileLogger;
 let docGenerator: CodebaseDocGenerator;
-let ragService: RAGService;
+let ragService: RAGService | LangchainRagService;
 let gitWatcher: GitWatcher | undefined;
 let fileHashCache: FileHashCache | undefined;
 let gitHooksManager: GitHooksManager | undefined;
@@ -25,15 +27,23 @@ let gitHooksManager: GitHooksManager | undefined;
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize file logger
   logger = new FileLogger(context);
-  logger.log('Codebase Visualizer extension activated');
+  logger.log('MindFrame extension activated');
   
-  console.log('Codebase Visualizer extension activated');
+  console.log('MindFrame extension activated');
 
   // Initialize services
   workspaceAnalyzer = new WorkspaceAnalyzer();
-  clineAdapter = new ClineAdapter();
+  agentAdapter = new AgentAdapter();
   docGenerator = new CodebaseDocGenerator();
-  ragService = new RAGService();
+  
+  // Initialize RAG service based on configuration
+  if (shouldUseLangchainRag()) {
+    ragService = getLangchainRagService();
+    logger.log('Using LangChain RAG with OpenAI embeddings');
+  } else {
+    ragService = new RAGService();
+    logger.log('Using default in-memory RAG');
+  }
   
   // Initialize GitWatcher for file change detection with branch awareness
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -158,14 +168,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register commands
   const showVisualizationCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.showVisualization',
+    'mindframe.showVisualization',
     async () => {
       await showVisualization(context);
     }
   );
 
   const refreshVisualizationCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.refreshVisualization',
+    'mindframe.refreshVisualization',
     async () => {
       if (visualizationPanel) {
         await refreshVisualization();
@@ -176,14 +186,14 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   const changePersonaCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.changePersona',
+    'mindframe.changePersona',
     async () => {
       await changePersona();
     }
   );
 
   const openLogFileCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.openLogFile',
+    'mindframe.openLogFile',
     async () => {
       const logPath = logger.getLogFilePath();
       const document = await vscode.workspace.openTextDocument(logPath);
@@ -194,7 +204,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Command to configure LiteLLM
   const configureLiteLLMCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.configureLiteLLM',
+    'mindframe.configureLiteLLM',
     async () => {
       const litellm = getLiteLLMService();
       const configured = await litellm.promptForConfiguration();
@@ -206,7 +216,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Command to generate docs with AI
   const generateDocsWithAICommand = vscode.commands.registerCommand(
-    'codebase-visualizer.generateDocsWithAI',
+    'mindframe.generateDocsWithAI',
     async () => {
       const litellm = getLiteLLMService();
       
@@ -231,7 +241,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Command to install git hooks
   const installGitHooksCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.installGitHooks',
+    'mindframe.installGitHooks',
     async () => {
       if (!gitHooksManager) {
         vscode.window.showWarningMessage('Git hooks manager not initialized. Not a git repository?');
@@ -254,7 +264,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Command to uninstall git hooks
   const uninstallGitHooksCommand = vscode.commands.registerCommand(
-    'codebase-visualizer.uninstallGitHooks',
+    'mindframe.uninstallGitHooks',
     async () => {
       if (!gitHooksManager) {
         vscode.window.showWarningMessage('Git hooks manager not initialized.');
@@ -270,40 +280,40 @@ export async function activate(context: vscode.ExtensionContext) {
   const mcpManager = getMCPClientManager();
 
   const showMCPStatusCommand = vscode.commands.registerCommand(
-    'codebaseVisualizer.showMCPStatus',
+    'mindframe.showMCPStatus',
     async () => {
       await mcpManager.showStatus();
     }
   );
 
   const connectMCPServersCommand = vscode.commands.registerCommand(
-    'codebaseVisualizer.connectMCPServers',
+    'mindframe.connectMCPServers',
     async () => {
       await mcpManager.connectAll();
     }
   );
 
   const disconnectMCPServersCommand = vscode.commands.registerCommand(
-    'codebaseVisualizer.disconnectMCPServers',
+    'mindframe.disconnectMCPServers',
     async () => {
       await mcpManager.disconnectAll();
     }
   );
 
-  // Cline MCP Configuration Commands
-  const clineMCPManager = getClineMCPManager();
+  // Agent MCP Configuration Commands
+  const agentMCPManager = getAgentMCPManager();
 
-  const addToClineMCPCommand = vscode.commands.registerCommand(
-    'codebaseVisualizer.addToClineMCP',
+  const addToAgentMCPCommand = vscode.commands.registerCommand(
+    'mindframe.addToAgentMCP',
     async () => {
-      await clineMCPManager.addProjectToCline(context);
+      await agentMCPManager.addProjectToAgent(context);
     }
   );
 
-  const removeFromClineMCPCommand = vscode.commands.registerCommand(
-    'codebaseVisualizer.removeFromClineMCP',
+  const removeFromAgentMCPCommand = vscode.commands.registerCommand(
+    'mindframe.removeFromAgentMCP',
     async () => {
-      await clineMCPManager.removeProjectFromCline();
+      await agentMCPManager.removeProjectFromAgent();
     }
   );
 
@@ -319,20 +329,20 @@ export async function activate(context: vscode.ExtensionContext) {
     showMCPStatusCommand,
     connectMCPServersCommand,
     disconnectMCPServersCommand,
-    addToClineMCPCommand,
-    removeFromClineMCPCommand,
+    addToAgentMCPCommand,
+    removeFromAgentMCPCommand,
     { dispose: () => disposeMCPClientManager() },
     logger
   );
 
-  // Check if Cline is available
-  const clineExtension = vscode.extensions.getExtension('saoudrizwan.claude-dev');
-  if (!clineExtension) {
+  // Check if AI Agent is available
+  const agentExtension = vscode.extensions.getExtension('saoudrizwan.claude-dev');
+  if (!agentExtension) {
     vscode.window.showWarningMessage(
-      'Cline extension not found. Code modification features will be disabled. Install Cline from the marketplace.',
-      'Install Cline'
+      'AI Agent extension not found. Code modification features will be disabled. Install an AI agent from the marketplace.',
+      'Install Agent'
     ).then(selection => {
-      if (selection === 'Install Cline') {
+      if (selection === 'Install Agent') {
         vscode.commands.executeCommand('workbench.extensions.search', 'saoudrizwan.claude-dev');
       }
     });
@@ -377,7 +387,7 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
 
       progress.report({ increment: 30, message: 'Generating documentation...' });
       
-      // Generate codebase documentation with AST only (centralized data in .doc_sync)
+      // Generate codebase documentation with AST only (centralized data in .mindframe)
       // This creates the foundation that View Docs and Ask AI will use
       let documentation;
       try {
@@ -387,7 +397,7 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
           components: documentation.components.length
         });
         vscode.window.showInformationMessage(
-          `📚 Codebase scanned: ${documentation.components.length} components indexed in .doc_sync`
+          `📚 Codebase scanned: ${documentation.components.length} components indexed in .mindframe`
         );
       } catch (error) {
         logger.error('Documentation generation failed', error);
@@ -396,14 +406,23 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
 
       progress.report({ increment: 50, message: 'Indexing for RAG...' });
       
-      // Initialize RAG service with in-memory ChromaDB and index documents
+      // Initialize RAG service and index documents
       try {
         await ragService.initialize(workspaceUri);
         
-        if (documentation) {
+        // For LangChain RAG, index the code graph directly
+        if (shouldUseLangchainRag() && ragService instanceof LangchainRagService) {
+          await ragService.indexGraph(analysisResult.graph);
+          const stats = await ragService.getStats();
+          logger.log('LangChain RAG indexing complete', { 
+            documents: stats.documentCount,
+            usingOpenAI: true
+          });
+        } else if (documentation) {
+          // For default RAG, use doc chunks
           const ragChunks = docGenerator.generateRAGChunks(documentation);
           await ragService.indexDocuments(ragChunks);
-          logger.log('RAG indexing complete (In-Memory ChromaDB)', { 
+          logger.log('RAG indexing complete (In-Memory)', { 
             chunks: ragChunks.length
           });
         }
@@ -423,7 +442,7 @@ async function showVisualization(context: vscode.ExtensionContext, useAI: boolea
         visualizationPanel.show();
       } else {
         // Create new panel
-        visualizationPanel = new VisualizationPanelReact(context, clineAdapter, ragService);
+        visualizationPanel = new VisualizationPanelReact(context, agentAdapter, ragService);
         
         // Set callback to clear reference when panel is closed
         visualizationPanel.onDispose = () => {
@@ -502,5 +521,5 @@ async function changePersona() {
 }
 
 export function deactivate() {
-  console.log('Codebase Visualizer extension deactivated');
+  console.log('MindFrame extension deactivated');
 }

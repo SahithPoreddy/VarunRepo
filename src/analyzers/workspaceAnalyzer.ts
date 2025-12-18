@@ -253,12 +253,56 @@ export class WorkspaceAnalyzer {
 
       console.log(`Spring Boot layers detected: Application=${layerGroups.application.length}, Controllers=${layerGroups.controller.length}, Services=${layerGroups.service.length}, Repositories=${layerGroups.repository.length}`);
 
-      // Create hierarchy: Application → Controllers → Services → Repositories → Entities
+      // Create hierarchy: Application/Main → Controllers → Services → Repositories → Entities
       const layerHierarchy = ['application', 'controller', 'service', 'repository', 'entity'];
       
-      // Create edges from Application/Main to Controllers
-      for (const appNode of layerGroups.application) {
+      // If no @SpringBootApplication class found, look for a class with main method (isEntryPoint)
+      // or create a virtual Main node to serve as root
+      let mainNodes = layerGroups.application;
+      
+      if (mainNodes.length === 0) {
+        // Look for Java entry point classes (classes with main method)
+        const javaEntryPoints = javaClassNodes.filter(n => n.isEntryPoint);
+        if (javaEntryPoints.length > 0) {
+          mainNodes = javaEntryPoints;
+          console.log(`No @SpringBootApplication found, using entry point classes: ${javaEntryPoints.map(n => n.label).join(', ')}`);
+        } else if (layerGroups.controller.length > 0 || layerGroups.service.length > 0 || layerGroups.repository.length > 0) {
+          // Create a virtual "Main" node as root for the Spring Boot hierarchy
+          const virtualMainId = `${workspaceUri.fsPath}:virtual:Main`;
+          const virtualMainNode: CodeNode = {
+            id: virtualMainId,
+            label: 'Main',
+            type: 'module',
+            language: 'java',
+            filePath: workspaceUri.fsPath,
+            startLine: 1,
+            endLine: 1,
+            isEntryPoint: true,
+            isPrimaryEntry: true,
+            sourceCode: '// Virtual entry point for Spring Boot application',
+            documentation: {
+              summary: 'Application Entry Point',
+              description: '[application] Spring Boot Application Root',
+              persona: {
+                developer: 'Main entry point that manages all controllers, services, and repositories',
+                'product-manager': 'The central hub of the application',
+                architect: 'Application root following layered architecture pattern',
+                'business-analyst': 'The main application component'
+              }
+            }
+          };
+          allNodes.push(virtualMainNode);
+          mainNodes = [virtualMainNode];
+          console.log('Created virtual Main node as Spring Boot root');
+        }
+      }
+      
+      // Create edges from Application/Main to Controllers AND set parentId
+      for (const appNode of mainNodes) {
         for (const controllerNode of layerGroups.controller) {
+          // Set parentId on controller to point to main
+          controllerNode.parentId = appNode.id;
+          
           const edgeExists = allEdges.some(e => 
             e.from === appNode.id && e.to === controllerNode.id && e.type === 'contains'
           );
@@ -273,6 +317,8 @@ export class WorkspaceAnalyzer {
         }
         // Also connect components directly to application
         for (const compNode of layerGroups.component) {
+          compNode.parentId = appNode.id;
+          
           const edgeExists = allEdges.some(e => 
             e.from === appNode.id && e.to === compNode.id && e.type === 'contains'
           );
@@ -285,11 +331,59 @@ export class WorkspaceAnalyzer {
             });
           }
         }
+        // If no controllers but services exist, connect Main directly to Services
+        if (layerGroups.controller.length === 0) {
+          for (const serviceNode of layerGroups.service) {
+            // Set parentId on service to point to main
+            if (!serviceNode.parentId) {
+              serviceNode.parentId = appNode.id;
+            }
+            
+            const edgeExists = allEdges.some(e => 
+              e.from === appNode.id && e.to === serviceNode.id && e.type === 'contains'
+            );
+            if (!edgeExists) {
+              allEdges.push({
+                from: appNode.id,
+                to: serviceNode.id,
+                type: 'contains',
+                label: 'manages'
+              });
+            }
+          }
+        }
+        // If no controllers and no services but repos exist, connect Main directly to Repos
+        if (layerGroups.controller.length === 0 && layerGroups.service.length === 0) {
+          for (const repoNode of layerGroups.repository) {
+            // Set parentId on repo to point to main
+            if (!repoNode.parentId) {
+              repoNode.parentId = appNode.id;
+            }
+            
+            const edgeExists = allEdges.some(e => 
+              e.from === appNode.id && e.to === repoNode.id && e.type === 'contains'
+            );
+            if (!edgeExists) {
+              allEdges.push({
+                from: appNode.id,
+                to: repoNode.id,
+                type: 'contains',
+                label: 'manages'
+              });
+            }
+          }
+        }
       }
 
-      // Create edges from Controllers to Services
+      // Create edges from Controllers to Services AND set parentId
+      // Services become children of the first controller that uses them
       for (const controllerNode of layerGroups.controller) {
         for (const serviceNode of layerGroups.service) {
+          // Only set parentId if not already set (first controller wins)
+          if (!serviceNode.parentId) {
+            serviceNode.parentId = controllerNode.id;
+          }
+          
           const edgeExists = allEdges.some(e => 
             e.from === controllerNode.id && e.to === serviceNode.id && e.type === 'contains'
           );
@@ -304,9 +398,15 @@ export class WorkspaceAnalyzer {
         }
       }
 
-      // Create edges from Services to Repositories
+      // Create edges from Services to Repositories AND set parentId
+      // Repositories become children of the first service that uses them
       for (const serviceNode of layerGroups.service) {
         for (const repoNode of layerGroups.repository) {
+          // Only set parentId if not already set (first service wins)
+          if (!repoNode.parentId) {
+            repoNode.parentId = serviceNode.id;
+          }
+          
           const edgeExists = allEdges.some(e => 
             e.from === serviceNode.id && e.to === repoNode.id && e.type === 'contains'
           );
@@ -321,9 +421,14 @@ export class WorkspaceAnalyzer {
         }
       }
 
-      // Create edges from Repositories to Entities
+      // Create edges from Repositories to Entities AND set parentId
       for (const repoNode of layerGroups.repository) {
         for (const entityNode of layerGroups.entity) {
+          // Only set parentId if not already set
+          if (!entityNode.parentId) {
+            entityNode.parentId = repoNode.id;
+          }
+          
           const edgeExists = allEdges.some(e => 
             e.from === repoNode.id && e.to === entityNode.id && e.type === 'contains'
           );
@@ -338,27 +443,63 @@ export class WorkspaceAnalyzer {
         }
       }
 
-      // Step 6.7: Create Python/FastAPI layer hierarchy (Main → Routers → Services → Models)
+      // Step 6.7: Create Python/FastAPI/Django/Flask layer hierarchy
+      // Now properly uses layer information from the enhanced Python parser
       const getPythonLayer = (node: CodeNode): string | null => {
         const desc = node.documentation?.description || '';
+        const summary = node.documentation?.summary || '';
         const sourceCode = node.sourceCode || '';
+        const label = node.label?.toLowerCase() || '';
         
-        // FastAPI app detection
-        if (sourceCode.includes('FastAPI()') || desc.includes('[endpoint]') || node.label?.toLowerCase().includes('main')) {
-          if (sourceCode.includes('FastAPI()')) return 'fastapi_app';
+        // First check for explicit layer markers from the parser (inside brackets)
+        const layerMatch = desc.match(/\[(app|router|endpoint|route|view|viewset|blueprint|service|dependency|model|schema|serializer|repository|test|admin|middleware|command|form)\]/i);
+        if (layerMatch) {
+          const layer = layerMatch[1].toLowerCase();
+          // Map framework-specific layers to generic layers
+          if (layer === 'app') return 'app';
+          if (['router', 'blueprint'].includes(layer)) return 'router';
+          if (['endpoint', 'route', 'view', 'viewset'].includes(layer)) return 'endpoint';
+          if (['service', 'dependency'].includes(layer)) return 'service';
+          if (['repository'].includes(layer)) return 'repository';
+          if (['model', 'schema', 'serializer'].includes(layer)) return 'model';
         }
-        // Router/endpoint detection
-        if (desc.includes('[endpoint]') || desc.includes('@router') || desc.includes('@app.')) return 'router';
-        // Service layer detection
-        if (node.label?.toLowerCase().includes('service') || desc.includes('[dependency]')) return 'service';
+        
+        // Check isPrimaryEntry flag set by parser (app = FastAPI() or if __name__ == "__main__")
+        if ((node as any).isPrimaryEntry || node.isEntryPoint) {
+          // Check if it's specifically the app creation
+          if (sourceCode.includes('FastAPI()') || sourceCode.includes('Flask(') || 
+              sourceCode.includes('Django') || summary.includes('[app]')) {
+            return 'app';
+          }
+        }
+        
+        // FastAPI/Flask app detection from source code
+        if (sourceCode.match(/^app\s*=\s*(FastAPI|Flask)\s*\(/m)) {
+          return 'app';
+        }
+        
+        // Router/endpoint detection via decorators
+        if (desc.includes('@router.') || desc.includes('@app.') || desc.includes('@bp.')) {
+          return 'endpoint';
+        }
+        if (sourceCode.includes('APIRouter(') || sourceCode.includes('Blueprint(')) {
+          return 'router';
+        }
+        
+        // Service layer detection by naming convention
+        if (label.includes('service')) return 'service';
+        
+        // Repository/CRUD detection by naming convention
+        if (label.includes('repository') || label.includes('crud') || label.includes('dao')) return 'repository';
+        
         // Model/Schema detection
-        if (desc.includes('[model]') || desc.includes('[schema]') || desc.includes('BaseModel')) return 'model';
-        // Database/Repository detection  
-        if (node.label?.toLowerCase().includes('repository') || node.label?.toLowerCase().includes('crud')) return 'repository';
+        if (sourceCode.includes('BaseModel') || sourceCode.includes('BaseSettings')) return 'model';
+        if (label.includes('model') || label.includes('schema') || label.includes('dto')) return 'model';
+        
         return null;
       };
 
-      // Group Python class/module nodes by their FastAPI layer
+      // Group Python class/module nodes by their framework layer
       const pythonNodes = allNodes.filter(n => 
         n.language === 'python' && 
         (n.type === 'class' || n.type === 'module' || n.type === 'function') &&
@@ -366,8 +507,9 @@ export class WorkspaceAnalyzer {
       );
 
       const pythonLayerGroups: { [key: string]: CodeNode[] } = {
-        fastapi_app: [],
+        app: [],
         router: [],
+        endpoint: [],
         service: [],
         repository: [],
         model: []
@@ -379,12 +521,54 @@ export class WorkspaceAnalyzer {
           pythonLayerGroups[layer].push(node);
         }
       }
+      
+      console.log(`Python layers detected: App=${pythonLayerGroups.app.length}, Routers=${pythonLayerGroups.router.length}, Endpoints=${pythonLayerGroups.endpoint.length}, Services=${pythonLayerGroups.service.length}, Models=${pythonLayerGroups.model.length}`);
 
-      console.log(`FastAPI layers detected: App=${pythonLayerGroups.fastapi_app.length}, Routers=${pythonLayerGroups.router.length}, Services=${pythonLayerGroups.service.length}, Models=${pythonLayerGroups.model.length}`);
+      // Step 6.7.1: Create virtual "App" node if no explicit app node exists but we have endpoints/routers
+      const hasAppNode = pythonLayerGroups.app.length > 0;
+      const hasPythonElements = pythonLayerGroups.router.length > 0 || 
+                                pythonLayerGroups.endpoint.length > 0 || 
+                                pythonLayerGroups.service.length > 0 ||
+                                pythonLayerGroups.model.length > 0;
 
-      // Create FastAPI hierarchy: App → Routers → Services → Repositories → Models
-      for (const appNode of pythonLayerGroups.fastapi_app) {
+      let virtualAppNode: CodeNode | null = null;
+      if (!hasAppNode && hasPythonElements) {
+        // Create a virtual "App" node as root
+        virtualAppNode = {
+          id: `${workspaceUri.fsPath}:virtual:PythonApp`,
+          label: 'App',
+          type: 'module',
+          language: 'python',
+          filePath: workspaceUri.fsPath,
+          startLine: 1,
+          endLine: 1,
+          sourceCode: '# Virtual App Node',
+          isEntryPoint: true,
+          isPrimaryEntry: true,
+          documentation: {
+            summary: 'Application Entry Point',
+            description: 'Virtual app node - root of the Python application hierarchy',
+            persona: {
+              developer: 'Application entry point',
+              'product-manager': 'Main application module',
+              architect: 'Root of Python application architecture',
+              'business-analyst': 'Application starting point'
+            }
+          }
+        };
+        allNodes.push(virtualAppNode);
+        pythonLayerGroups.app.push(virtualAppNode);
+        console.log('Created virtual App node for Python hierarchy');
+      }
+
+      // Step 6.7.2: Build Python hierarchy: App → Routers → Endpoints → Services → Repositories → Models
+      // App → Routers (AND set parentId)
+      for (const appNode of pythonLayerGroups.app) {
         for (const routerNode of pythonLayerGroups.router) {
+          // Set parentId on router
+          if (!routerNode.parentId) {
+            routerNode.parentId = appNode.id;
+          }
           const edgeExists = allEdges.some(e => 
             e.from === appNode.id && e.to === routerNode.id && e.type === 'contains'
           );
@@ -397,17 +581,60 @@ export class WorkspaceAnalyzer {
             });
           }
         }
+        // App → Endpoints (if no routers)
+        if (pythonLayerGroups.router.length === 0) {
+          for (const endpointNode of pythonLayerGroups.endpoint) {
+            if (!endpointNode.parentId) {
+              endpointNode.parentId = appNode.id;
+            }
+            const edgeExists = allEdges.some(e => 
+              e.from === appNode.id && e.to === endpointNode.id && e.type === 'contains'
+            );
+            if (!edgeExists) {
+              allEdges.push({
+                from: appNode.id,
+                to: endpointNode.id,
+                type: 'contains',
+                label: 'includes'
+              });
+            }
+          }
+        }
       }
 
-      // Routers → Services
+      // Routers → Endpoints (AND set parentId)
       for (const routerNode of pythonLayerGroups.router) {
-        for (const serviceNode of pythonLayerGroups.service) {
+        for (const endpointNode of pythonLayerGroups.endpoint) {
+          if (!endpointNode.parentId) {
+            endpointNode.parentId = routerNode.id;
+          }
           const edgeExists = allEdges.some(e => 
-            e.from === routerNode.id && e.to === serviceNode.id && e.type === 'contains'
+            e.from === routerNode.id && e.to === endpointNode.id && e.type === 'contains'
           );
           if (!edgeExists) {
             allEdges.push({
               from: routerNode.id,
+              to: endpointNode.id,
+              type: 'contains',
+              label: 'handles'
+            });
+          }
+        }
+      }
+
+      // Routers/Endpoints → Services (AND set parentId)
+      const endpointLayers = [...pythonLayerGroups.router, ...pythonLayerGroups.endpoint];
+      for (const endpointNode of endpointLayers) {
+        for (const serviceNode of pythonLayerGroups.service) {
+          if (!serviceNode.parentId) {
+            serviceNode.parentId = endpointNode.id;
+          }
+          const edgeExists = allEdges.some(e => 
+            e.from === endpointNode.id && e.to === serviceNode.id && e.type === 'contains'
+          );
+          if (!edgeExists) {
+            allEdges.push({
+              from: endpointNode.id,
               to: serviceNode.id,
               type: 'contains',
               label: 'calls'
@@ -416,9 +643,12 @@ export class WorkspaceAnalyzer {
         }
       }
 
-      // Services → Repositories
+      // Services → Repositories (AND set parentId)
       for (const serviceNode of pythonLayerGroups.service) {
         for (const repoNode of pythonLayerGroups.repository) {
+          if (!repoNode.parentId) {
+            repoNode.parentId = serviceNode.id;
+          }
           const edgeExists = allEdges.some(e => 
             e.from === serviceNode.id && e.to === repoNode.id && e.type === 'contains'
           );
@@ -433,9 +663,15 @@ export class WorkspaceAnalyzer {
         }
       }
 
-      // Repositories/Services → Models
-      for (const repoNode of [...pythonLayerGroups.repository, ...pythonLayerGroups.service]) {
+      // Repositories/Services → Models (AND set parentId)
+      const dataAccessLayers = pythonLayerGroups.repository.length > 0 
+        ? pythonLayerGroups.repository 
+        : pythonLayerGroups.service;
+      for (const repoNode of dataAccessLayers) {
         for (const modelNode of pythonLayerGroups.model) {
+          if (!modelNode.parentId) {
+            modelNode.parentId = repoNode.id;
+          }
           const edgeExists = allEdges.some(e => 
             e.from === repoNode.id && e.to === modelNode.id && e.type === 'contains'
           );

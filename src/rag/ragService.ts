@@ -143,7 +143,7 @@ export class RAGService {
    * Load documents from the local RAG chunks file
    */
   private async loadLocalDocsCache(): Promise<void> {
-    const chunksPath = path.join(this.workspaceRoot, '.doc_sync', 'search.json');
+    const chunksPath = path.join(this.workspaceRoot, '.mindframe', 'search.json');
     
     if (fs.existsSync(chunksPath)) {
       try {
@@ -692,10 +692,10 @@ ${content}
   }
 
   /**
-   * Load ReactFlow graph from .doc_sync/graph/graph.json
+   * Load ReactFlow graph from .mindframe/graph/graph.json
    */
   async loadGraph(): Promise<{ nodes: any[]; edges: any[]; metadata: any } | null> {
-    const graphPath = path.join(this.workspaceRoot, '.doc_sync', 'graph', 'graph.json');
+    const graphPath = path.join(this.workspaceRoot, '.mindframe', 'graph', 'graph.json');
     
     if (fs.existsSync(graphPath)) {
       try {
@@ -716,7 +716,7 @@ ${content}
   }
 
   /**
-   * Load individual node details from .doc_sync/nodes/<nodeId>.json
+   * Load individual node details from .mindframe/nodes/<nodeId>.json
    */
   async loadNodeDetails(nodeId: string): Promise<any | null> {
     // Sanitize the node ID for file name
@@ -725,7 +725,7 @@ ${content}
       .replace(/_+/g, '_')
       .substring(0, 100);
     
-    const nodePath = path.join(this.workspaceRoot, '.doc_sync', 'nodes', `${sanitizedId}.json`);
+    const nodePath = path.join(this.workspaceRoot, '.mindframe', 'nodes', `${sanitizedId}.json`);
     
     if (fs.existsSync(nodePath)) {
       try {
@@ -740,10 +740,10 @@ ${content}
   }
 
   /**
-   * Load node index from .doc_sync/nodes/_index.json
+   * Load node index from .mindframe/nodes/_index.json
    */
   async loadNodeIndex(): Promise<any[] | null> {
-    const indexPath = path.join(this.workspaceRoot, '.doc_sync', 'nodes', '_index.json');
+    const indexPath = path.join(this.workspaceRoot, '.mindframe', 'nodes', '_index.json');
     
     if (fs.existsSync(indexPath)) {
       try {
@@ -758,10 +758,10 @@ ${content}
   }
 
   /**
-   * Load project metadata from .doc_sync/metadata.json
+   * Load project metadata from .mindframe/metadata.json
    */
   async loadMetadata(): Promise<any | null> {
-    const metadataPath = path.join(this.workspaceRoot, '.doc_sync', 'metadata.json');
+    const metadataPath = path.join(this.workspaceRoot, '.mindframe', 'metadata.json');
     
     if (fs.existsSync(metadataPath)) {
       try {
@@ -776,17 +776,17 @@ ${content}
   }
 
   /**
-   * Check if .doc_sync exists for this workspace
+   * Check if .mindframe exists for this workspace
    */
   hasDocSync(): boolean {
-    const docSyncPath = path.join(this.workspaceRoot, '.doc_sync');
+    const docSyncPath = path.join(this.workspaceRoot, '.mindframe');
     return fs.existsSync(docSyncPath);
   }
 
   /**
-   * Get the .doc_sync folder path
+   * Get the .mindframe folder path
    */
   getDocSyncPath(): string {
-    return path.join(this.workspaceRoot, '.doc_sync');
+    return path.join(this.workspaceRoot, '.mindframe');
   }
 }

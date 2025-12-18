@@ -106,9 +106,9 @@ export interface GraphLayout {
 }
 
 /**
- * Context provided to Cline for code modifications
+ * Context provided to Agent for code modifications
  */
-export interface ClineContext {
+export interface AgentContext {
   nodeId: string;
   nodeName: string;
   nodeType: string;
@@ -122,9 +122,9 @@ export interface ClineContext {
 }
 
 /**
- * Response from Cline modification
+ * Response from Agent modification
  */
-export interface ClineResponse {
+export interface AgentResponse {
   success: boolean;
   modifiedCode?: string;
   error?: string;

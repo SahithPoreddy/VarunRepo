@@ -1,11 +1,11 @@
 {
-  "name": "doc-sync-mcp-server",
+  "name": "mindframe-mcp-server",
   "version": "1.0.0",
-  "description": "MCP Server for exposing .doc_sync documentation to AI agents",
+  "description": "MCP Server for exposing .mindframe documentation to AI agents",
   "main": "index.js",
   "type": "module",
   "bin": {
-    "doc-sync-mcp": "./index.js"
+    "mindframe-mcp": "./index.js"
   },
   "scripts": {
     "start": "node index.js"
@@ -17,7 +17,7 @@
   "keywords": [
     "mcp",
     "documentation",
-    "cline",
+    "mindframe",
     "ai"
   ],
   "license": "MIT"

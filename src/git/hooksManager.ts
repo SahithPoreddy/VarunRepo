@@ -22,7 +22,7 @@ export interface GitHookConfig {
 }
 
 /**
- * GitHooksManager - Manages Git hooks for the Codebase Visualizer extension
+ * GitHooksManager - Manages Git hooks for the MindFrame extension
  * 
  * This manager:
  * 1. Can install hooks in the user's .git/hooks folder
@@ -35,7 +35,7 @@ export class GitHooksManager {
   private gitPath: string = '';
   private hooksPath: string = '';
   private isInitialized: boolean = false;
-  private hookMarker: string = '# Codebase-Visualizer-Hook';
+  private hookMarker: string = '# MindFrame-Hook';
   
   // Event emitter for hook triggers
   private onHookTriggeredEmitter = new vscode.EventEmitter<{ type: GitHookType; files?: string[] }>();
@@ -230,7 +230,7 @@ export class GitHooksManager {
         action = `
 # Notify extension about the commit
 if [ -n "\${VSCODE_GIT_HOOK_NOTIFIER:-}" ]; then
-  echo "codebase-visualizer:post-commit:$(git rev-parse HEAD)" > "$VSCODE_GIT_HOOK_NOTIFIER"
+  echo "mindframe:post-commit:$(git rev-parse HEAD)" > "$VSCODE_GIT_HOOK_NOTIFIER"
 fi
 `;
         break;
@@ -243,7 +243,7 @@ if [ "$3" = "1" ]; then
   current_branch=$(git branch --show-current)
   echo "Branch checkout detected: $current_branch"
   if [ -n "\${VSCODE_GIT_HOOK_NOTIFIER:-}" ]; then
-    echo "codebase-visualizer:post-checkout:$current_branch" > "$VSCODE_GIT_HOOK_NOTIFIER"
+    echo "mindframe:post-checkout:$current_branch" > "$VSCODE_GIT_HOOK_NOTIFIER"
   fi
 fi
 `;
@@ -254,7 +254,7 @@ fi
 # Notify extension about merge
 merge_head=$(cat .git/MERGE_HEAD 2>/dev/null || echo "none")
 if [ -n "\${VSCODE_GIT_HOOK_NOTIFIER:-}" ]; then
-  echo "codebase-visualizer:post-merge:$merge_head" > "$VSCODE_GIT_HOOK_NOTIFIER"
+  echo "mindframe:post-merge:$merge_head" > "$VSCODE_GIT_HOOK_NOTIFIER"
 fi
 `;
         break;
@@ -262,21 +262,21 @@ fi
       case 'pre-commit':
         action = `
 # Run before commit - extension can validate files
-echo "Codebase Visualizer: Pre-commit hook running..."
+echo "MindFrame: Pre-commit hook running..."
 `;
         break;
         
       case 'pre-push':
         action = `
 # Run before push - extension can perform final checks
-echo "Codebase Visualizer: Pre-push hook running..."
+echo "MindFrame: Pre-push hook running..."
 `;
         break;
     }
 
     return `${shebang}
 ${this.hookMarker}
-# Installed by Codebase Visualizer extension on ${timestamp}
+# Installed by MindFrame extension on ${timestamp}
 # This hook notifies the extension about git operations
 ${action}
 ${this.hookMarker}-end
@@ -288,14 +288,14 @@ ${this.hookMarker}-end
    */
   startWatchingHookTriggers(): vscode.Disposable {
     // Create a trigger file that hooks can write to
-    const triggerFile = path.join(this.gitPath, '.codebase-visualizer-trigger');
+    const triggerFile = path.join(this.gitPath, '.mindframe-trigger');
     
     // Set up environment variable for hook scripts
     process.env.VSCODE_GIT_HOOK_NOTIFIER = triggerFile;
     
     // Watch for trigger file changes
     const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(this.gitPath, '.codebase-visualizer-trigger')
+      new vscode.RelativePattern(this.gitPath, '.mindframe-trigger')
     );
     
     watcher.onDidChange(async () => {
@@ -318,8 +318,8 @@ ${this.hookMarker}-end
       
       const content = fs.readFileSync(triggerFile, 'utf8').trim();
       
-      // Parse trigger: format is "codebase-visualizer:hook-type:data"
-      const match = content.match(/^codebase-visualizer:([\w-]+):(.*)$/);
+      // Parse trigger: format is "mindframe:hook-type:data"
+      const match = content.match(/^mindframe:([\w-]+):(.*)$/);
       if (match) {
         const hookType = match[1] as GitHookType;
         const data = match[2];

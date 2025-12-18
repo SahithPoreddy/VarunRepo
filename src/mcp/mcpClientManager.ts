@@ -67,7 +67,7 @@ export class MCPClientManager {
       vscode.StatusBarAlignment.Right,
       100
     );
-    this.statusBarItem.command = 'codebaseVisualizer.showMCPStatus';
+    this.statusBarItem.command = 'mindframe.showMCPStatus';
     this.outputChannel = vscode.window.createOutputChannel('MCP Client');
     this.updateStatusBar();
   }
@@ -76,7 +76,7 @@ export class MCPClientManager {
    * Get MCP server configurations from VS Code settings
    */
   private getServerConfigs(): MCPServerConfig[] {
-    const config = vscode.workspace.getConfiguration('codebaseVisualizer');
+    const config = vscode.workspace.getConfiguration('mindframe');
     return config.get<MCPServerConfig[]>('mcpServers') || [];
   }
 
@@ -108,7 +108,7 @@ export class MCPClientManager {
     
     if (configs.length === 0) {
       vscode.window.showWarningMessage(
-        'No MCP servers configured. Add servers in Settings → Codebase Visualizer → MCP Servers'
+        'No MCP servers configured. Add servers in Settings → MindFrame → MCP Servers'
       );
       return;
     }
@@ -169,7 +169,7 @@ export class MCPClientManager {
       });
 
       const client = new Client({
-        name: 'codebase-visualizer',
+        name: 'mindframe',
         version: '1.0.0',
       }, {
         capabilities: {}
@@ -466,7 +466,7 @@ export class MCPClientManager {
     } else if (selected.label.includes('Open Settings')) {
       vscode.commands.executeCommand(
         'workbench.action.openSettings',
-        'codebaseVisualizer.mcpServers'
+        'mindframe.mcpServers'
       );
     } else if (selected.label.includes('Show Logs')) {
       this.outputChannel.show();

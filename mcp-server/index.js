@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Doc-Sync MCP Server
+ * MindFrame MCP Server
  * 
- * Exposes .doc_sync documentation to AI agents via MCP protocol.
+ * Exposes .mindframe documentation to AI agents via MCP protocol.
  * 
  * Usage:
  *   node index.js /path/to/project
  * 
- * Cline Config Example:
+ * Agent Config Example:
  *   {
  *     "mcpServers": {
  *       "backend-docs": {
@@ -40,15 +40,15 @@ if (!projectPath) {
     process.exit(1);
 }
 
-const docSyncPath = path.join(projectPath, ".doc_sync");
+const mindframePath = path.join(projectPath, ".mindframe");
 
-if (!fs.existsSync(docSyncPath)) {
-    console.error(`Error: .doc_sync folder not found at ${docSyncPath}`);
+if (!fs.existsSync(mindframePath)) {
+    console.error(`Error: .mindframe folder not found at ${mindframePath}`);
     console.error("Please run 'Sync Docs' in the project first.");
     process.exit(1);
 }
 
-// Helper functions to read .doc_sync data
+// Helper functions to read .mindframe data
 function readJsonFile(filePath) {
     try {
         if (fs.existsSync(filePath)) {
@@ -61,25 +61,25 @@ function readJsonFile(filePath) {
 }
 
 function getGraph() {
-    return readJsonFile(path.join(docSyncPath, "graph", "graph.json"));
+    return readJsonFile(path.join(mindframePath, "graph", "graph.json"));
 }
 
 function getDocs() {
-    return readJsonFile(path.join(docSyncPath, "docs.json"));
+    return readJsonFile(path.join(mindframePath, "docs.json"));
 }
 
 function getMetadata() {
-    return readJsonFile(path.join(docSyncPath, "metadata.json"));
+    return readJsonFile(path.join(mindframePath, "metadata.json"));
 }
 
 function getNodeIndex() {
-    return readJsonFile(path.join(docSyncPath, "nodes", "_index.json"));
+    return readJsonFile(path.join(mindframePath, "nodes", "_index.json"));
 }
 
 function getNode(nodeId) {
     // Sanitize nodeId for filesystem
     const sanitizedId = nodeId.replace(/[^a-zA-Z0-9_-]/g, "_");
-    return readJsonFile(path.join(docSyncPath, "nodes", `${sanitizedId}.json`));
+    return readJsonFile(path.join(mindframePath, "nodes", `${sanitizedId}.json`));
 }
 
 function searchDocs(query) {

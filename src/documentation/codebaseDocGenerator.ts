@@ -57,7 +57,7 @@ interface CodebaseDocumentation {
 
 /**
  * Generates comprehensive documentation for the entire codebase
- * and saves it to the .doc_sync folder with optimized JSON structure for ReactFlow.
+ * and saves it to the .mindframe folder with optimized JSON structure for ReactFlow.
  * Uses LiteLLM for AI-powered documentation when configured.
  * Uses DocumentationAgent (LangChain) for intelligent multi-step documentation generation.
  */
@@ -154,36 +154,36 @@ export class CodebaseDocGenerator {
   }
 
   /**
-   * Ensure .gitattributes has merge strategy for .doc_sync folder
+   * Ensure .gitattributes has merge strategy for .mindframe folder
    * This prevents merge conflicts by auto-resolving with "ours" strategy
    */
   private ensureGitAttributesMergeStrategy(): void {
     try {
       const gitattributesPath = path.join(this.workspaceRoot, '.gitattributes');
       const mergeRules = `
-# Auto-resolve merge conflicts for generated documentation (.doc_sync)
+# Auto-resolve merge conflicts for generated documentation (.mindframe)
 # Uses "ours" strategy - keeps current branch's version during merges
 # After merge, run "Sync Docs" to regenerate docs for the merged codebase
-.doc_sync/** merge=ours
-.doc_sync/docs.json merge=ours
-.doc_sync/graph/** merge=ours
-.doc_sync/nodes/** merge=ours
-.doc_sync/search.json merge=ours
-.doc_sync/metadata.json merge=ours
+.mindframe/** merge=ours
+.mindframe/docs.json merge=ours
+.mindframe/graph/** merge=ours
+.mindframe/nodes/** merge=ours
+.mindframe/search.json merge=ours
+.mindframe/metadata.json merge=ours
 `;
 
       if (fs.existsSync(gitattributesPath)) {
-        // Check if .doc_sync rules already exist
+        // Check if .mindframe rules already exist
         const existingContent = fs.readFileSync(gitattributesPath, 'utf-8');
-        if (!existingContent.includes('.doc_sync/** merge=ours')) {
+        if (!existingContent.includes('.mindframe/** merge=ours')) {
           // Append the merge rules
           fs.appendFileSync(gitattributesPath, '\n' + mergeRules);
-          console.log('Added .doc_sync merge strategy to existing .gitattributes');
+          console.log('Added .mindframe merge strategy to existing .gitattributes');
         }
       } else {
         // Create new .gitattributes file
         fs.writeFileSync(gitattributesPath, mergeRules.trim() + '\n');
-        console.log('Created .gitattributes with .doc_sync merge strategy');
+        console.log('Created .gitattributes with .mindframe merge strategy');
       }
     } catch (error) {
       // Non-critical - just log and continue
@@ -202,7 +202,7 @@ export class CodebaseDocGenerator {
     forceRegenerate: boolean = false
   ): Promise<CodebaseDocumentation> {
     this.workspaceRoot = workspaceUri.fsPath;
-    this.docsFolder = path.join(this.workspaceRoot, '.doc_sync');
+    this.docsFolder = path.join(this.workspaceRoot, '.mindframe');
     this.nodesFolder = path.join(this.docsFolder, 'nodes');
     this.graphFolder = path.join(this.docsFolder, 'graph');
     
@@ -225,7 +225,7 @@ export class CodebaseDocGenerator {
       }
     }
 
-    // Ensure .gitattributes has merge strategy for .doc_sync to avoid merge conflicts
+    // Ensure .gitattributes has merge strategy for .mindframe to avoid merge conflicts
     this.ensureGitAttributesMergeStrategy();
 
     const { nodes, edges } = analysisResult.graph;
@@ -316,7 +316,7 @@ export class CodebaseDocGenerator {
     forceRegenerate: boolean = false
   ): Promise<CodebaseDocumentation> {
     this.workspaceRoot = workspaceUri.fsPath;
-    this.docsFolder = path.join(this.workspaceRoot, '.doc_sync');
+    this.docsFolder = path.join(this.workspaceRoot, '.mindframe');
     this.nodesFolder = path.join(this.docsFolder, 'nodes');
     this.graphFolder = path.join(this.docsFolder, 'graph');
     
@@ -562,6 +562,7 @@ export class CodebaseDocGenerator {
   /**
    * Generate documentation for a single component using LiteLLM
    * Uses persona-specific prompts for richer, more detailed documentation
+   * Optimized for RAG retrieval with comprehensive, searchable content
    */
   private async generateComponentDocWithLLM(
     node: CodeNode,
@@ -580,7 +581,8 @@ export class CodebaseDocGenerator {
         // Also get technical details for additional metadata
         const aiDetails = await this.litellm.generateTechnicalDetails(node);
 
-        return {
+        // Build enhanced doc with all RAG-optimized fields
+        const enhancedDoc: ComponentDoc = {
           ...baseDoc,
           summary: personaDocs.summary || baseDoc.summary,
           aiSummary: personaDocs.summary,
@@ -588,12 +590,21 @@ export class CodebaseDocGenerator {
           aiPurpose: aiDetails?.purpose,
           aiKeyFeatures: personaDocs.keyPoints || aiDetails?.keyFeatures,
           aiComplexity: personaDocs.complexity || aiDetails?.complexity,
-          usageExamples: personaDocs.sampleCode ? [personaDocs.sampleCode] : undefined,
+          usageExamples: personaDocs.sampleCode ? [personaDocs.sampleCode] : (aiDetails?.usageScenarios || undefined),
           personaSpecific: {
             [this.currentPersona]: personaDocs.personaInsights
           } as Record<Persona, string>,
           technicalDetails: personaDocs.detailedDescription || baseDoc.technicalDetails,
         };
+
+        // Add new RAG-optimized fields (cast to any for flexibility)
+        (enhancedDoc as any).howItWorks = aiDetails?.howItWorks;
+        (enhancedDoc as any).usageScenarios = aiDetails?.usageScenarios;
+        (enhancedDoc as any).errorHandling = aiDetails?.errorHandling;
+        (enhancedDoc as any).relatedConcepts = aiDetails?.relatedConcepts;
+        (enhancedDoc as any).searchableTerms = (personaDocs as any).searchableTerms;
+
+        return enhancedDoc;
       } catch (error) {
         console.error(`LLM enhancement failed for ${node.label}:`, error);
         // Fall back to basic doc
@@ -965,7 +976,7 @@ export class CodebaseDocGenerator {
   }
 
   /**
-   * Save documentation to files in .doc_sync structure
+   * Save documentation to files in .mindframe structure
    */
   private async saveDocumentation(documentation: CodebaseDocumentation): Promise<void> {
     // 1. Save ReactFlow-optimized graph.json
@@ -1027,6 +1038,7 @@ export class CodebaseDocGenerator {
     fs.writeFileSync(docsJsonPath, JSON.stringify(docsJson, null, 2));
 
     // 3. Save individual node JSON files (for detailed view and caching)
+    // These files are optimized for RAG retrieval with rich, searchable content
     documentation.components.forEach(comp => {
       const nodeFileName = this.sanitizeFileName(comp.id) + '.json';
       const nodePath = path.join(this.nodesFolder, nodeFileName);
@@ -1039,7 +1051,7 @@ export class CodebaseDocGenerator {
         relativePath: comp.relativePath,
         startLine: comp.startLine,
         endLine: comp.endLine,
-        // AI documentation
+        // AI documentation - comprehensive content for RAG
         summary: comp.aiSummary || comp.summary,
         aiSummary: comp.aiSummary,
         aiDescription: comp.description,
@@ -1047,6 +1059,12 @@ export class CodebaseDocGenerator {
         aiPurpose: comp.aiPurpose,
         aiKeyFeatures: comp.aiKeyFeatures,
         aiComplexity: comp.aiComplexity,
+        // New RAG-optimized fields
+        howItWorks: (comp as any).howItWorks,
+        usageScenarios: (comp as any).usageScenarios,
+        errorHandling: (comp as any).errorHandling,
+        relatedConcepts: (comp as any).relatedConcepts,
+        searchableTerms: (comp as any).searchableTerms,
         // Code analysis
         dependencies: comp.dependencies,
         dependents: comp.dependents,
@@ -1061,7 +1079,9 @@ export class CodebaseDocGenerator {
         keywords: comp.keywords,
         personaSpecific: comp.personaSpecific,
         // Source code for reference
-        sourceCode: comp.sourceCode
+        sourceCode: comp.sourceCode,
+        // RAG-specific: concatenated searchable text for embedding
+        ragContent: this.buildRagContent(comp)
       };
       fs.writeFileSync(nodePath, JSON.stringify(nodeData, null, 2));
     });
@@ -1172,6 +1192,103 @@ export class CodebaseDocGenerator {
       .replace(/_+/g, '_')
       .substring(0, 100);
     return hash;
+  }
+
+  /**
+   * Build concatenated RAG content for better embedding and search
+   * Combines all descriptive fields into a single searchable text
+   */
+  private buildRagContent(comp: ComponentDoc): string {
+    const parts: string[] = [];
+    
+    // Name and type for identification
+    parts.push(`${comp.name} is a ${comp.type} in ${comp.language}.`);
+    parts.push(`Located at ${comp.relativePath}, lines ${comp.startLine}-${comp.endLine}.`);
+    
+    // AI-generated summary (most important for search)
+    if (comp.aiSummary) {
+      parts.push(comp.aiSummary);
+    } else if (comp.summary) {
+      parts.push(comp.summary);
+    }
+    
+    // Description
+    if (comp.description) {
+      parts.push(comp.description);
+    }
+    
+    // Technical details
+    if (comp.technicalDetails) {
+      parts.push(`Technical details: ${comp.technicalDetails}`);
+    }
+    
+    // Purpose
+    if (comp.aiPurpose) {
+      parts.push(`Purpose: ${comp.aiPurpose}`);
+    }
+    
+    // Key features as sentences
+    if (comp.aiKeyFeatures && comp.aiKeyFeatures.length > 0) {
+      parts.push(`Key features: ${comp.aiKeyFeatures.join('. ')}`);
+    }
+    
+    // How it works
+    if ((comp as any).howItWorks) {
+      parts.push(`How it works: ${(comp as any).howItWorks}`);
+    }
+    
+    // Usage scenarios
+    if ((comp as any).usageScenarios && (comp as any).usageScenarios.length > 0) {
+      parts.push(`Usage scenarios: ${(comp as any).usageScenarios.join('. ')}`);
+    }
+    
+    // Error handling
+    if ((comp as any).errorHandling) {
+      parts.push(`Error handling: ${(comp as any).errorHandling}`);
+    }
+    
+    // Dependencies
+    if (comp.dependencies && comp.dependencies.length > 0) {
+      parts.push(`Dependencies: ${comp.dependencies.join(', ')}.`);
+    }
+    
+    // Dependents
+    if (comp.dependents && comp.dependents.length > 0) {
+      parts.push(`Used by: ${comp.dependents.join(', ')}.`);
+    }
+    
+    // Patterns
+    if (comp.patterns && comp.patterns.length > 0) {
+      parts.push(`Patterns used: ${comp.patterns.join(', ')}.`);
+    }
+    
+    // Parameters
+    if (comp.parameters && comp.parameters.length > 0) {
+      const paramStr = comp.parameters.map(p => `${p.name}: ${p.type || 'any'}`).join(', ');
+      parts.push(`Parameters: ${paramStr}.`);
+    }
+    
+    // Return type
+    if (comp.returnType) {
+      parts.push(`Returns: ${comp.returnType}.`);
+    }
+    
+    // Keywords
+    if (comp.keywords && comp.keywords.length > 0) {
+      parts.push(`Keywords: ${comp.keywords.join(', ')}.`);
+    }
+    
+    // Searchable terms
+    if ((comp as any).searchableTerms) {
+      parts.push(`Related terms: ${(comp as any).searchableTerms}`);
+    }
+    
+    // Related concepts
+    if ((comp as any).relatedConcepts && (comp as any).relatedConcepts.length > 0) {
+      parts.push(`Related concepts: ${(comp as any).relatedConcepts.join(', ')}.`);
+    }
+    
+    return parts.filter(p => p && p.trim()).join(' ');
   }
 
   /**
@@ -1448,7 +1565,7 @@ export class CodebaseDocGenerator {
    * Check if documentation already exists
    */
   docsExist(workspaceUri: vscode.Uri): boolean {
-    const docsPath = path.join(workspaceUri.fsPath, '.doc_sync', 'metadata.json');
+    const docsPath = path.join(workspaceUri.fsPath, '.mindframe', 'metadata.json');
     return fs.existsSync(docsPath);
   }
 
@@ -1456,8 +1573,8 @@ export class CodebaseDocGenerator {
    * Load existing documentation
    */
   loadExistingDocs(workspaceUri: vscode.Uri): CodebaseDocumentation | null {
-    const metadataPath = path.join(workspaceUri.fsPath, '.doc_sync', 'metadata.json');
-    const graphPath = path.join(workspaceUri.fsPath, '.doc_sync', 'graph', 'graph.json');
+    const metadataPath = path.join(workspaceUri.fsPath, '.mindframe', 'metadata.json');
+    const graphPath = path.join(workspaceUri.fsPath, '.mindframe', 'graph', 'graph.json');
     
     if (fs.existsSync(metadataPath) && fs.existsSync(graphPath)) {
       try {

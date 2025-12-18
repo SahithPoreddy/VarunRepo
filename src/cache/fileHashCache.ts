@@ -43,7 +43,7 @@ interface CacheMetadata {
  * 
  * This system uses MD5 hashing to detect file changes efficiently:
  * - Only rehashes files if modification time has changed
- * - Stores hash cache in .doc_sync/cache/
+ * - Stores hash cache in .mindframe/cache/
  * - Supports incremental updates
  */
 export class FileHashCache {
@@ -62,7 +62,7 @@ export class FileHashCache {
    */
   async initialize(workspaceRoot: string): Promise<void> {
     this.workspaceRoot = workspaceRoot;
-    this.cacheDir = path.join(workspaceRoot, '.doc_sync', 'cache');
+    this.cacheDir = path.join(workspaceRoot, '.mindframe', 'cache');
     this.hashCachePath = path.join(this.cacheDir, 'file_hashes.json');
     this.metadataPath = path.join(this.cacheDir, 'cache_metadata.json');
 

@@ -202,7 +202,7 @@ export class GitWatcher {
   private shouldIgnore(filePath: string): boolean {
     const ignorePaths = [
       'node_modules', 'dist', 'build', '.git', 
-      'coverage', '.doc_sync', '__pycache__'
+      'coverage', '.mindframe', '__pycache__'
     ];
     return ignorePaths.some(p => filePath.includes(p));
   }
